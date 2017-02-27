@@ -31,3 +31,10 @@ to it.
 *Can I predict the renewable energy power share based on the weather forecast?
 *Can I predict the demand for electricity a day ahead?
 *Can I predict the price of electricity contracts a day ahead?
+
+
+#Changing Focus
+The initial attempt with the Bulk data lead to getting stuck trying to manipulate
+enormous data files. I will instead try to use the API to get the data I am most interested
+in for this initial analysis - state level data at the monthly level for many years.
+Perhaps then going back to comparing demand forecasts for machine learning.
