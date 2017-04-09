@@ -1,0 +1,8 @@
+
+#Pull out names of columns to find useful data.
+#Prints 5th field, csv data.
+
+#To extract series_id, and names.
+cat ELEC.txt | awk --field-separator=, '{print $1, $2}' ELEC_id_name.txt
+
+#can now grep from ELEC data to find desired data-sets.

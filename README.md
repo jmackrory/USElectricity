@@ -38,3 +38,21 @@ The initial attempt with the Bulk data lead to getting stuck trying to manipulat
 enormous data files. I will instead try to use the API to get the data I am most interested
 in for this initial analysis - state level data at the monthly level for many years.
 Perhaps then going back to comparing demand forecasts for machine learning.
+
+
+#Sources of Data
+ELEC.txt and EBA.txt were acquired from EIA.gov on January 21, 2017,
+via their opendata.
+ELEC.txt has summary and plant level statistics of generation across the
+US for types of generation, as well as quality of fuels.
+EBA.txt has around 1 year of data showing in hour chunks the
+net generation across the US, alongside demand forecasts.  
+
+
+#Extracting Data
+I used awk to pull out the names and series ID from the bulk data.
+To extract series_id, and names.
+"cat ELEC.txt | awk --field-separator=, '{print $1, $2}' ELEC_id_name.txt"
+
+For a general picture of US electricity generation, I think I want the ELEC.GEN
+ELEC.PLANT is too finegrained for this initial survey.
