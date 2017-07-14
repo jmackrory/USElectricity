@@ -4,10 +4,7 @@
 import pandas as pd
 import numpy as np
 import sqlalchemy as sa
-import cProfile, io, pstats, json,os
-
-pr=cProfile.Profile()
-pr.enable()
+import json,os
 
 # #Borrowed from Introducing Python pg 180.
 fname='ELEC'
@@ -49,17 +46,19 @@ for i in range(0,nfile):
 	#stop reading file.
 	print(fname_split)
 	df=pd.read_json(fname_split,lines=True);
-	# 	#values ensure no tailing name/dtype.
-	# 	#use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
-	# 	#gets confused by brackets and commas in data.
-	df.loc[:,'data']=str(df.loc[:,'data'].values);
-	df.loc[:,'childseries']=str(df.loc[:,'data'].values);
-		#Use SQLite since only single user, read operations for this exploratory phase. 
-	df.to_sql(fname_split,engine,index=False,if_exists='append');
+	#values ensure no tailing name/dtype.
+	#use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
+	#gets confused by brackets and commas in data).
+	df['data']=df['data'].astype('str')
+	if 'childseries' in df.columns:	
+		print('childseries in columns\n')
+		df['childseries']=df['childseries'].astype('str')
+# 	#Use SQLite since only single user, read operations for this exploratory phase. 
+ 	df.to_sql(fname,engine,index=False,if_exists='append');
 
-# pr.disable()
-# s = io.StringIO()
-# sortby = 'cumulative'
-# ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-# ps.print_stats()
-# print(s.getvalue())
+# # pr.disable()
+# # s = io.StringIO()
+# # sortby = 'cumulative'
+# # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+# # ps.print_stats()
+# # print(s.getvalue())
