@@ -9,19 +9,18 @@ import cProfile, io, pstats, json,os
 pr=cProfile.Profile()
 pr.enable()
 
-#Convert ELEC data to SQL
-# elec_dat = pd.read_json('data/ELEC_short.txt',lines=True)
-# elec_json = json.loads('data/ELEC_short.txt')
-
-#Borrowed from Introducing Python pg 180.
+# #Borrowed from Introducing Python pg 180.
 fname='ELEC'
-elec_file=open('data/'+fname+'.txt','r')
 db_name=fname+'.db'
-os.remove('data/'+db_name)
+try:
+	os.remove('data/'+db_name)
+	print('File: data/'+db_name+' was deleted.')
+except:
+	print('File: data/'+db_name+' does not exist')
 engine=sa.create_engine('sqlite:///data/'+db_name)
-#
-#make a new table.  
-#Did this since SQL threw a fit when a new column showed up.
+# #
+# #make a new table.  
+# #Did this since SQL threw a fit when a new column showed up.
 metadata=sa.MetaData()
 ELEC_short= sa.Table(fname,metadata,
 										 sa.Column('copyright',sa.String),
@@ -44,31 +43,23 @@ ELEC_short= sa.Table(fname,metadata,
 
 metadata.create_all(engine)
 
-#while True:
-d0=pd.DataFrame()
-df_tot=pd.DataFrame()
-i=0
-for i in range(0,1000):
-	line=elec_file.readline();
+nfile=57;
+for i in range(0,nfile):
+	fname_split='data/split_dat/'+fname+str("%02d"%(i));
 	#stop reading file.
-	if not line:
-		break
-	i+=1
-	#every thousand lines output that to a data frame.
-	df=pd.read_json(line,lines=True);
-	df_tot=pd.concat([df_tot,df]);
-	#values ensure no tailing name/dtype.
-	#use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
-	#gets confused by brackets and commas in data.
-	if (i%100):
-		df_tot.loc[:,'data']=str(df_tot.loc[:,'data'].values);
+	print(fname_split)
+	df=pd.read_json(fname_split,lines=True);
+	# 	#values ensure no tailing name/dtype.
+	# 	#use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
+	# 	#gets confused by brackets and commas in data.
+	df.loc[:,'data']=str(df.loc[:,'data'].values);
+	df.loc[:,'childseries']=str(df.loc[:,'data'].values);
 		#Use SQLite since only single user, read operations for this exploratory phase. 
-		df_tot.to_sql(fname,engine,index=False,if_exists='append');
-		df_tot=d0;
+	df.to_sql(fname_split,engine,index=False,if_exists='append');
 
-pr.disable()
-s = io.StringIO()
-sortby = 'cumulative'
-ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-ps.print_stats()
-print(s.getvalue())
+# pr.disable()
+# s = io.StringIO()
+# sortby = 'cumulative'
+# ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+# ps.print_stats()
+# print(s.getvalue())
