@@ -93,7 +93,6 @@ def check_and_create_columns(table_name,cur,df):
 # conn,cur=create_fresh_table(database_name,fname)
 
 #Loop over splits, and upload them to the SQL database.
-#nfile=2;
 path='data/split_data/'
 #flist = (path+fname+'00',path+fname+'01')
 flist=os.listdir(path)
