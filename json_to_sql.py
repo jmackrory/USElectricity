@@ -88,27 +88,32 @@ def check_and_create_columns(table_name,cur,df):
 			cur.execute(q3)
 	return None
 
-create_new_database(database_name)
-conn,cur=create_fresh_table(database_name,fname)
-
+#Make brand-new databases.
+# create_new_database(database_name)
+# conn,cur=create_fresh_table(database_name,fname)
 
 #Loop over splits, and upload them to the SQL database.
 #nfile=2;
 path='data/split_data/'
 #flist = (path+fname+'00',path+fname+'01')
 flist=os.listdir(path)
+flist.sort()
 for fn in flist:
 	if fn.find(fname) >= 0:
-		print('Reading in :'+fname)
+		print('Reading in :'+fn)
 #		fname_split=path+fname+str("%02d"%(i));
 #		print(fname_split)
-		df=pd.read_json(fn,lines=True);
+		df=pd.read_json(path+fn,lines=True);
 		#use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
 		#gets confused by brackets and commas in data and childseries).
-		df['data']=df['data'].astype('str')
+		if 'data' in df.columns:	
+			df['data']=df['data'].astype('str')
 		if 'childseries' in df.columns:	
 			print('childseries in columns')
 			df['childseries']=df['childseries'].astype('str')
+		if 'vertex' in df.columns:	
+			print('vertex in columns')
+			df['vertex']=df['vertex'].astype('str')
 
 		check_and_create_columns(fname,cur,df)
 		df.to_sql(fname,engine,index=False,if_exists='append');		
