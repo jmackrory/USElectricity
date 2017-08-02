@@ -17,7 +17,6 @@ import json
 if 'test_df' not in locals():
  state_elec_df = pd.read_json('data/ELEC_split/ELEC_state.txt',lines=True)
 # # #keep what seem to be important non-zero columns.
- state_elec_trim=state_elec_df.loc[:,['name','geoset_id','geography','data','start','end']]
 
  # # #try to subset based on solar, wind (at this level)
  # # #Use data_frame.str.contains('solar').sum()  to find matches
@@ -28,7 +27,7 @@ if 'test_df' not in locals():
  # #(even if I won't use it for this splitting)
  # #Need to search for solar, wind, oil, nuclear.
  #grab some test monthly data to play with and plot.  
- test_df = state_elec_trim.loc[1878]  #data on East North Central Monthly Solar
+ test_df = state_elec_df.loc[1878]  #data on East North Central Monthly Solar
  
  #access data via this call
  test_dat = test_df['data']
@@ -37,52 +36,84 @@ if 'test_df' not in locals():
 
 #need to convert date string to DateTime
 
-#Need to convert dates to date/time
-def make_df_timeindex(df):
-	#get date_time_index based on period, start and end
+# #Need to convert dates to date/time
+# def make_df_timeindex(df):
+# 	#get date_time_index based on period, start and end
 
-	#Make a Pandas Series with DateTimeIndex.
-	#Use Start, End, with final label from geoset_id.
-	#Use Final label from Geoset_id which should have values in M,Q,A
-	interval=df['geoset_id'][-1]
+# 	#Make a Pandas Series with DateTimeIndex.
+# 	#Use Start, End, with final label from geoset_id.
+# 	#Use Final label from Geoset_id which should have values in M,Q,A
+# 	interval=df['f']
 
-	if (interval=='M'):
-		start_str=df['start']
-		end_str=df['end']
-		date_format='%Y%m'
-	elif (interval=='Q'):
-		start_str=quarter_to_month(df['start'])
-		end_str=quarter_to_month(df['end'])
-		date_format='%Y%m'
-	elif (interval=='A'):
-		start_str=df['start']
-		end_str=df['end']
-		date_format='%Y'
+# 	if (interval=='M'):
+# 		start_str=df['start']
+# 		end_str=df['end']
+# 		date_format='%Y%m'
+# 	elif (interval=='Q'):
+# 		start_str=quarter_to_month(df['start'])
+# 		end_str=quarter_to_month(df['end'])
+# 		date_format='%Y%m'
+# 	elif (interval=='A'):
+# 		start_str=df['start']
+# 		end_str=df['end']
+# 		date_format='%Y'
 
-	print([start_str,end_str,date_format])
-	start_date=pd.to_datetime(start_str,format=date_format)
-	end_date=pd.to_datetime(end_str,format=date_format)
-	date_indx=pd.date_range(start_date,end_date,freq=interval,closed='left')
+# 	print([start_str,end_str,date_format])
+# 	start_date=pd.to_datetime(start_str,format=date_format)
+# 	end_date=pd.to_datetime(end_str,format=date_format)
+# 	date_indx=pd.date_range(start_date,end_date,freq=interval,closed='left')
 
-	return date_indx
+# 	return date_indx
 
 #Make a list of lists, with first sublist entry as time, second sublist entry is data
 #into a pandas timeseries.  Extract the interval from the geoset ID, and use to construct 
 #the Period Index.
-def make_df_periodindex(df,data_num):
-	interval=df['geoset_id'][-1]
+def make_df_periodindex(df,interval):
+
 	#make empty series
 	indx=list()
 	dat2=list()
-	for item in test_df[data_num]:
+	for item in df:
 		print(item)
 		indx.append(item[0])
 		dat2.append(item[1])
-
 	return pd.Series(dat2,index=pd.PeriodIndex(indx,freq=interval))
 
-test_df['data2']=make_df_periodindex(test_df,'data')
+
+#Make a list of lists, with first sublist entry as time, second sublist entry is data
+#into a pandas timeseries.  Extract the interval from the geoset ID, and use to construct 
+#the Period Index.
+def make_df_periodindex_np(df,interval):
+
+	#make empty series
+	df2=np.asarray(df);
+	indx=df[:,0];
+	dat2=df[:,1];
+	# for item in df:
+	# 	print(item)
+	# 	indx.append(item[0])
+	# 	dat2.append(item[1])
+	return pd.Series(dat2,index=pd.PeriodIndex(indx,freq=interval))
+
+
+
+#test_df['data2']=make_df_periodindex(test_df,'data')
 		
+#function to convert whole dataframe's data to 
+def convert_df(df):
+	Nrows=len(df)
+	df['data2']=pd.Series()
+	for i in range(0,Nrows):
+		if (len(df['data']) > 1):
+			print('Making',i,'dataset')
+			interval=df.loc[i,'f']
+			data_series=make_df_periodindex(df.loc[i,'data'],interval)
+			df.loc[i,'data2']=data_series
+
+test_df2 = state_elec_df.loc[0:10]  #data on East North Central Monthly Solar
+convert_df(test_df2)
+
+#Just use name for column labels, with common period index.  
 
 
 
