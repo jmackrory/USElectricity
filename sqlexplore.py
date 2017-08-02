@@ -47,18 +47,19 @@ def safe_sql_query(table_name,out_columns, series_type='Net generation', state='
 
 #Get a dataframe from SQL database with desired name, and columns.
 #Can select tpe of series, state, and type.
-def get_dataframe(out_columns,cur,series_type='Net Generation', state='Oregon', gen_type='all'):
-	q = safe_sql_query("ELEC",out_columns,series_type,state,gen_type)
+def get_dataframe(cur,out_columns,table="ELEC",series_type='Net Generation', state='Oregon', gen_type='solar'):
+	q = safe_sql_query(table,out_columns,series_type,state,gen_type)
 	cur.execute(q);
+	print(q.as_string(cur))
 	df0=cur.fetchall()
-	df = pd.DataFrame(df0,columns=out_columns)
+	print(df0[0:2])
+	df = pd.DataFrame(df0,columns=out_columns);
 	return df
 
 #Make a list of lists, with first sublist entry as time, second sublist entry is data
 #into a pandas timeseries.  Extract the interval from the geoset ID, and use to construct 
 #the Period Index.
 def make_df_periodindex_np(series,interval):
-
 	#make empty series
 	series2=np.asarray(series);
 	indx=series[:,0];
@@ -99,5 +100,5 @@ def convert_df(df):
 #Retail sales of electricity
 
 #Can Identify useful tags by splitting at colons":"
-
-
+out_col=('name','data')
+df=get_dataframe(cur,out_col,series_type='Net generation',state='Oregon',gen_type='solar')
