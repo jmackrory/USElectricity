@@ -45,25 +45,24 @@ def safe_sql_query(table_name,out_columns, series_type='Net generation', state='
 
 	return(q1)
 
-#Get a dataframe from SQL database with desired name, and columns.
-#Can select tpe of series, state, and type.
+#Get a dataframe from SQL database for given psycopg2 cursor,
+#with desired output columns.  
+#Must select data based on series type, state, and type of generation.
 def get_dataframe(cur,out_columns,table="ELEC",series_type='Net Generation', state='Oregon', gen_type='solar'):
 	q = safe_sql_query(table,out_columns,series_type,state,gen_type)
 	cur.execute(q);
-	print(q.as_string(cur))
-	df0=cur.fetchall()
-	print(df0[0:2])
+	df0=cur.fetchall();
 	df = pd.DataFrame(df0,columns=out_columns);
 	return df
 
 #Make a list of lists, with first sublist entry as time, second sublist entry is data
 #into a pandas timeseries.  Extract the interval from the geoset ID, and use to construct 
 #the Period Index.
-def make_df_periodindex_np(series,interval):
+def make_df_periodindex(series,interval):
 	#make empty series
 	series2=np.asarray(series);
-	indx=series[:,0];
-	dat2=series[:,1];
+	indx=series2[:,0];
+	dat2=series2[:,1];
 	# for item in series:
 	# 	print(item)
 	# 	indx.append(item[0])
@@ -71,18 +70,30 @@ def make_df_periodindex_np(series,interval):
 	return pd.Series(dat2,index=pd.PeriodIndex(indx,freq=interval))
 
 #test_df['data2']=make_df_periodindex(test_df,'data')
-		
-#function to convert whole dataframe's data to 
+
+
+#Initial readin of SQL dataframes returns 'data' as a string of 
+# a list of lists.  
+#This function goes row by row, converting that 'data' column
+#into a new series, with datetimeindex in 'data2'
 def convert_df(df):
 	Nrows=len(df)
 	df['data2']=pd.Series()
 	for i in range(0,Nrows):
-		if (len(df['data']) > 1):
-			print('Making',i,'dataset')
-			interval=df.loc[i,'f']
-			data_series=make_df_periodindex(df.loc[i,'data'],interval)
-			df.loc[i,'data2']=data_series
-
+		#check there's actually data there.
+#		try:
+		print('Making',i,'dataset')
+		interval=df.loc[i,'f']
+		#use next line since the read in dataframe has returned a string.
+		init_series=eval(df.loc[i,'data'])
+		data_series=make_df_periodindex(init_series,interval)
+		#this next line does not work.  Might need to setup a multi-index?
+		#Have hierarchy: row number, time-index?
+		df.loc[i,'data2']=data_series
+		# except:
+		# 	print('Failed to make dataset for '+df.loc[i,'name'])
+		# 	print('Continuing to next')
+#	return df
 
 # q=safe_sql_query(table_name="ELEC",out_columns=('name','series_id'),gen_type='solar')
 # print(q.as_string(conn))
@@ -100,5 +111,5 @@ def convert_df(df):
 #Retail sales of electricity
 
 #Can Identify useful tags by splitting at colons":"
-out_col=('name','data')
-df=get_dataframe(cur,out_col,series_type='Net generation',state='Oregon',gen_type='solar')
+out_col=('name','data','f')
+df=get_dataframe(cur,out_col,series_type='Net generation',state='Oregon',gen_type='solar');
