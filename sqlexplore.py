@@ -28,7 +28,12 @@ column_names=['name','series_id','data','interval','start','end','units']
 #make safe SQL queries, with deired list of columns in "out_columns".
 #Assume we are searching through name for entries with desired type of series, for particular states,
 #as well as generation type.
-def safe_sql_query(table_name,out_columns, series_type='Net generation', state='Oregon', gen_type='all'):
+def safe_sql_query(table_name,
+									 out_columns,
+									 series_type='Net generation', 
+									 state='Oregon',
+									 gen_type='all',
+									 freq='M'):
 	#make up categories to match the name by. 
 	query_match_list=list()
 	l1 = sql.Literal(series_type+' :%')
@@ -38,18 +43,25 @@ def safe_sql_query(table_name,out_columns, series_type='Net generation', state='
 	like_query=sql.SQL(' AND name LIKE ').join([l1,l2,l3])
 
 	#Total SQL query to select desired columns with features 
-	q1 = sql.SQL("SELECT {} FROM {} WHERE (name LIKE {} ) ").format(
+	q1 = sql.SQL("SELECT {} FROM {} WHERE (name LIKE {} AND f LIKE {}) ").format(
         sql.SQL(' ,').join(map(sql.Identifier,out_columns)),
         sql.Identifier(table_name),
-				like_query)
+        like_query,
+        sql.Literal(freq))
 
 	return(q1)
 
 #Get a dataframe from SQL database for given psycopg2 cursor,
 #with desired output columns.  
 #Must select data based on series type, state, and type of generation.
-def get_dataframe(cur,out_columns,table="ELEC",series_type='Net Generation', state='Oregon', gen_type='solar'):
-	q = safe_sql_query(table,out_columns,series_type,state,gen_type)
+def get_dataframe(cur,
+									out_columns,
+									table="ELEC",
+									series_type='Net Generation',
+									state='Oregon',
+									gen_type='solar',
+									freq='M'):
+	q = safe_sql_query(table,out_columns,series_type,state,gen_type,freq)
 	cur.execute(q);
 	df0=cur.fetchall();
 	df = pd.DataFrame(df0,columns=out_columns);
@@ -71,14 +83,14 @@ def make_df_periodindex(series,interval):
 
 #test_df['data2']=make_df_periodindex(test_df,'data')
 
-
 #Initial readin of SQL dataframes returns 'data' as a string of 
 # a list of lists.  
 #This function goes row by row, converting that 'data' column
 #into a new series, with datetimeindex in 'data2'
 def convert_df(df):
 	Nrows=len(df)
-	df['data2']=pd.Series()
+#	df['data2']=pd.Series()
+	data_array=[];
 	for i in range(0,Nrows):
 		#check there's actually data there.
 #		try:
@@ -87,19 +99,18 @@ def convert_df(df):
 		#use next line since the read in dataframe has returned a string.
 		init_series=eval(df.loc[i,'data'])
 		data_series=make_df_periodindex(init_series,interval)
+		data_array.append(data_series)
 		#this next line does not work.  Might need to setup a multi-index?
 		#Have hierarchy: row number, time-index?
-		df.loc[i,'data2']=data_series
+		#df.loc[i,'data2']=data_series
 		# except:
 		# 	print('Failed to make dataset for '+df.loc[i,'name'])
 		# 	print('Continuing to next')
-#	return df
+	return data_array
 
 # q=safe_sql_query(table_name="ELEC",out_columns=('name','series_id'),gen_type='solar')
 # print(q.as_string(conn))
 # cur.execute(q)
-
-
 
 #identify useful fields. name, series_id.
 
@@ -108,7 +119,9 @@ def convert_df(df):
 
 #Useful fields: Net Generation : state : type
 #Also interesting: Average retail price of electricity.  
+#Net generation
 #Retail sales of electricity
+#Revenue
 
 #Can Identify useful tags by splitting at colons":"
 out_col=('name','data','f')

@@ -2,10 +2,9 @@
 #for storage in SQL database.  Intend to use on ELEC data to speed up slicing,
 #and avoid having to store all of the data in RAM.
 
-
 import pandas as pd
 import numpy as np
-import sqlalchemy
+import sqlalchemy as sa
 import json
 
 d={'A':['a','b','c','None'], 
@@ -22,13 +21,27 @@ length=df.shape[0];
 for i in range(0,length):
 	df.loc[i,'C']=str(df.loc[i,'C'])
 
-# # #Use SQLite since only single user, read operations for this exploratory phase. 
-engine=sqlalchemy.create_engine('sqlite:///test.db')
-# data_types={'A':sqlalchemy.types.TEXT,'B':sqlalchemy.types.INTEGER,'C':sqlalchemy.types.TEXT}
-# data_types={'C':sqlalchemy.types.TEXT}
-df.to_sql('data',engine,chunksize=2,index=False,if_exists='replace')#,dtype=data_types)
+	#Use SQLite since only single user, read operations for this exploratory phase. 
 
-#js_txt=json.loads('data/ELEC_short.txt')
+engine=sa.create_engine('sqlite:///test.db')
 
-df2 = pd.read_sql('data',engine)
+metadata=sa.MetaData()
+table_name='data'
+data_db= sa.Table(table_name,metadata)
+metadata.create_all(engine)
+
+# data_types={'A':sa.types.TEXT,'B':sa.types.INTEGER,'C':sa.types.TEXT}
+# data_types={'C':sa.types.TEXT}
+df.to_sql('table_name',engine,index=False,if_exists='replace')#,dtype=data_types)
+
+l1=('A','B','C','D')
+for column_name in l1:
+	table_name='data'
+	column_type='TEXT'
+	# com_str=str('CASEIF COL_LENGTH('+table_name+','+column_name+') IS NULL'
+	# 						+' ALTER TABLE '+table_name+' ADD COLUMN '+column_name+' '+column_type )
+	engine.execute(com_str)
+
+#read out selected columns from the data under certain conditions  Huzzah!
+df2 = pd.read_sql('SELECT A,C FROM data WHERE B==4',engine)
 

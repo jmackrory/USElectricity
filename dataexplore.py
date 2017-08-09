@@ -6,32 +6,6 @@ import pandas as pd
 import numpy as np
 import json
 
-#Read in ALL State-Level Bulk Electricity Data
-#elec_dat = pd.read_json('data/ELEC.txt',lines=True)
-#manifest_df = pd.read_json('data/manifest.txt')
-
-#Used grep to split huge ELEC data-set into:
-#coal, coke, gas, nuclear, petroleum,wind,solar,hydro,oil and state.
-
-# # #Can further select out trim down.
-if 'test_df' not in locals():
- state_elec_df = pd.read_json('data/ELEC_split/ELEC_state.txt',lines=True)
-# # #keep what seem to be important non-zero columns.
-
- # # #try to subset based on solar, wind (at this level)
- # # #Use data_frame.str.contains('solar').sum()  to find matches
- # solar_msk=state_elec_trim.name.str.contains('solar')
- # #Use Series.str.get_dummies(sep=':') to split name based on levels.
- # state_elec_names_split=state_elec_trim.name.str.get_dummies(sep=':')
- # #The above gives me a list of the available fields: much easier to understand 
- # #(even if I won't use it for this splitting)
- # #Need to search for solar, wind, oil, nuclear.
- #grab some test monthly data to play with and plot.  
- test_df = state_elec_df.loc[1878]  #data on East North Central Monthly Solar
- 
- #access data via this call
- test_dat = test_df['data']
-
 #endif
 
 #need to convert date string to DateTime
@@ -83,13 +57,13 @@ def make_df_periodindex(df,interval):
 #Make a list of lists, with first sublist entry as time, second sublist entry is data
 #into a pandas timeseries.  Extract the interval from the geoset ID, and use to construct 
 #the Period Index.
-def make_df_periodindex_np(df,interval):
+def make_df_periodindex_np(series,interval):
 
 	#make empty series
-	df2=np.asarray(df);
-	indx=df[:,0];
-	dat2=df[:,1];
-	# for item in df:
+	series2=np.asarray(series);
+	indx=series[:,0];
+	dat2=series[:,1];
+	# for item in series:
 	# 	print(item)
 	# 	indx.append(item[0])
 	# 	dat2.append(item[1])
@@ -109,9 +83,6 @@ def convert_df(df):
 			interval=df.loc[i,'f']
 			data_series=make_df_periodindex(df.loc[i,'data'],interval)
 			df.loc[i,'data2']=data_series
-
-test_df2 = state_elec_df.loc[0:10]  #data on East North Central Monthly Solar
-convert_df(test_df2)
 
 #Just use name for column labels, with common period index.  
 
