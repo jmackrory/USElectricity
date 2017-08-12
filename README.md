@@ -1,5 +1,6 @@
 # US-Electricity
 ============================================================
+
 ##Goal
 
 This project aims to download and explore data about the US
@@ -10,14 +11,39 @@ about power generation and demand.
 In particular I want to explore the mix of fuel types used,
 how/when is electricity used, and the cost of buying it.  The notions tie into applying
 data science to develop the smart grid. Can we predict demand and supply of electricity
-from renewable sources?  I plan to compare the renewable energy data with the
-available weather data from NOAA to build a model to predict 
+from renewable sources?  
+
+I initially hoped to explore predictions about the type of generation available during the day, with
+fine resolution.  However, that data is not available in the EIA realtime dataset.
+What is available is the net generation by power supplier, and the net interchange.
+This could be studied with a similar goal: predict the net demand a day ahead, and the interchange.
+
+(Such finegrained data is not actually available in this dataset - what is available is
+net generation, and interchange between power companies.) 
 
 The project will use Python and Pandas to explore the data.
 Initially however I will stick to plotting, summary statistics, linear regression,
-and Fourier analysis. Evidently electricity usage is strongly seasonal, and has daily oscillations.
+and Fourier analysis. Obviously, electricity usage is strongly seasonal, and has daily oscillations.
 Ideally, if the data supports it, I would like to try applying some machine learning techniques
 to it.
+I will try to build a simple model based on historical weather data, and time of year. 
+
+## Data Sources
+
+
+The electricity data has been taken from EIA.gov in February, for the real-time grid data (EBA.txt),
+as well as broad summary data on electricity (ELEC.txt) from 
+https://www.eia.gov/electricity/data.php
+
+The weather data is proving more difficult to find.  Weather Underground has hourly data
+for all cities for at leas the previous few years (but it's not free). 
+The Local Climatological Data from NOAA's Climate Data Online service seems to fit the bill. 
+(https://www.ncdc.noaa.gov/cdo-web/datasets)
+Can get city data, with hourly resolution in monthly chunks.
+
+
+
+
 
 ##Exploratory Questions
 * What is the mix of energy used in electricity generation across the US?
