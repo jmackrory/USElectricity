@@ -15,11 +15,6 @@ import psycopg2
 import os
 from psycopg2 import sql
 
-# #Borrowed from Introducing Python pg 180.
-database_name='US_ELEC'
-fname='ELEC'
-engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
-
 # #make a new table.  
 
 #Make new database by logging into 
@@ -41,7 +36,7 @@ def create_new_database(database_name):
 	return None
 
 #Create fresh table in a database by dropping the old one, and putting a new blank one in.
-def create_fresh_table(database_name, table_name,init_column='init'):
+def create_fresh_table(database_name, table_name,init_column='name'):
 	conn=psycopg2.connect(dbname=database_name,host='localhost')
 	conn.set_session(autocommit=True)
 	cur = conn.cursor()
@@ -88,23 +83,22 @@ def check_and_create_columns(table_name,cur,df):
 			cur.execute(q3)
 	return None
 
-#Make brand-new databases.
-# create_new_database(database_name)
-# conn,cur=create_fresh_table(database_name,fname)
-
 #Loop over splits, and upload them to the SQL database.
-path='data/split_data/'
-#flist = (path+fname+'00',path+fname+'01')
-flist=os.listdir(path)
-flist.sort()
-for fn in flist:
-	if fn.find(fname) >= 0:
-		print('Reading in :'+fn)
-#		fname_split=path+fname+str("%02d"%(i));
-#		print(fname_split)
-		df=pd.read_json(path+fn,lines=True);
-		#use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
-		#gets confused by brackets and commas in data and childseries).
+#Assumes that large data files have been split using something like
+# "split -l 100 -d fname.txt split_data/fname"
+# to break initial files into smaller chunks.
+def put_data_into_sql(fname,cur,engine):
+	path='data/split_data/'
+	flist=os.listdir(path)
+	flist.sort()
+	for fn in flist:
+		if fn.find(fname) >= 0:
+			print('Reading in :'+fn)
+			#		fname_split=path+fname+str("%02d"%(i));
+			#		print(fname_split)
+			df=pd.read_json(path+fn,lines=True);
+			#use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
+			#gets confused by brackets and commas in data and childseries).
 		if 'data' in df.columns:	
 			df['data']=df['data'].astype('str')
 		if 'childseries' in df.columns:	
@@ -116,16 +110,15 @@ for fn in flist:
 
 		check_and_create_columns(fname,cur,df)
 		df.to_sql(fname,engine,index=False,if_exists='append');		
-	# for column_name in df.columns():
-	# 	t1 = sql.Identifier(table_name)
-	# 	c1 = sql.Identifier(column_name)
-	# 	try:
-	# 		#check if column is there
-	# 		q2 = sql.SQL("SELECT {1} FROM {0} LIMIT 0").format(t1,c1)
-	# 		cur.execute(q2)
-	# 	except:
-	# 		print('Column '+column_name+' not found.  Adding to Database.')
-	# 		q2 = sql.SQL("ALTER TABLE {0} ADD COLUMN {1} TEXT").format(t1,c1)
-	# 		cur.execute(q2)
-#	df.to_sql(fname,engine,index=False,if_exists='append');
+
+# #Borrowed from Introducing Python pg 180.
+database_name='US_ELEC'
+fname='EBA'
+engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
+
+#Make brand-new databases.  
+create_new_database(database_name)
+##NB: Erases old table!
+conn,cur=create_fresh_table(database_name,fname)
+def put_data_into_sql(fname,cur,engine):
 
