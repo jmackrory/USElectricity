@@ -106,46 +106,51 @@ def make_elec_dataframe(df):
     name_vec=df.loc[indx_vec,'ID']
     name_vec.index = range(num_series)
     ts_tot=list();
-    df_new=pd.DataFrame()
+    #make initial dataframe
+    df_new=pd.DataFrame(index=pd.DatetimeIndex(start='2011',end='2015',freq='15 min'))
     tf='%d%b%y:%H:%M:%S'
     for i in range(num_series-1):
         name=name_vec[i]
-        #times=pd.to_datetime(df.loc[indx_vec[i]:indx_vec[i+1]-1,'LocalDateTime'],format=tf)
-        start_time=pd.to_datetime(df.loc[indx_vec[i],'LocalDateTime'],format=tf)
-        end_time=pd.to_datetime(df.loc[indx_vec[i+1]-1,'LocalDateTime'],format=tf)
-        times=pd.DatetimeIndex(start=start_time,end=end_time,freq='15 min')
+        times=pd.to_datetime(df.loc[indx_vec[i]:indx_vec[i+1]-1,'LocalDateTime'],format=tf)
+        # start_time=pd.to_datetime(df.loc[indx_vec[i],'LocalDateTime'],format=tf)
+        # end_time=pd.to_datetime(df.loc[indx_vec[i+1]-1,'LocalDateTime'],format=tf)
+        # times=pd.DatetimeIndex(start=start_time,end=end_time,freq='15 min')
         elec=df.loc[indx_vec[i]:indx_vec[i+1]-1,'kWh'].values
-        ts = pd.Series(data=elec,index=times)
-        df_new[name]=ts
+        df_loc=pd.DataFrame(elec,index=times,columns=[name_vec[i]])
+        print(df_loc.head())
+        df_new=df_new.join(df_loc,how='outer')
     return df_new
+
+df1=make_elec_dataframe(df)
+
+df1.
 
 #df1= make_elec_series(df)
 #Plot a list of timeseries
-def plot_data(date,df):
-    for s in df:
-        try:plt.plot(s[date])
-        except:print(date+' not found')
-    plt.show()
-    return
+# def plot_data(date,df):
+#     for s in df:
+#         try:plt.plot(s[date])
+#         except:print(date+' not found')
+#     plt.show()
+#     return
 
-def make_dummy_frame():
-    time=[pd.DatetimeIndex(['2012','2014','2015']),
-          pd.DatetimeIndex(['2011','2012','2013','2014']),
-          pd.DatetimeIndex(['2011','2012','2015','2016'])]
-    data=[[1,3.4,9],[1.0,0.0,-1.0,0.1],[2,3,5,7]]
+# #Testing function to playwith joining pandas objects.
+# def make_dummy_frame():
+#     time=[pd.DatetimeIndex(['2012','2014','2015']),
+#           pd.DatetimeIndex(['2011','2012','2013','2014']),
+#           pd.DatetimeIndex(['2011','2012','2015','2016'])]
+#     data=[[1,3.4,9],[1.0,0.0,-1.0,0.1],[2,3,5,7]]
 
-    df=pd.DataFrame()
-    names=['name1','name2','name3']
-    df=pd.DataFrame(data[0],index=time[0],columns=[names[0]])
-    for i in range(1,3):
-        df_loc=pd.DataFrame(data[i],index=time[i],columns=[names[i]])
-        print(i)
-        print(df_loc)
-        df=df.join(df_loc,how='outer')
-    #df.columns=names
-    return df
+#     df=pd.DataFrame()
+#     names=['name1','name2','name3']
+#     #df=pd.DataFrame(data[0],index=time[0],columns=[names[0]])
+#     for i in range(3):
+#         df_loc=pd.DataFrame(data[i],index=time[i],columns=[names[i]])
+#         df=df.join(df_loc,how='outer')
+#     #df.columns=names
+#     return df
 
-dummyframe=make_dummy_frame()
+#dummyframe=make_dummy_frame()
 #When getting satellite data restrict from 5am-7pm.
 
 #Randomly sample 10% of days as test set.
