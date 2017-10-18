@@ -29,11 +29,11 @@ column_names=['name','series_id','data','interval','start','end','units']
 #Assume we are searching through name for entries with desired type of series, for particular states,
 #as well as generation type.
 def safe_sql_query(table_name,
-									 out_columns,
-									 series_type='Net generation', 
-									 state='Oregon',
-									 gen_type='all',
-									 freq='M'):
+		   out_columns,
+		   series_type='Net generation', 
+		   state='Oregon',
+		   gen_type='all',
+		   freq='M'):
 	#make up categories to match the name by. 
 	query_match_list=list()
 	l1 = sql.Literal(series_type+' :%')
@@ -55,12 +55,12 @@ def safe_sql_query(table_name,
 #with desired output columns.  
 #Must select data based on series type, state, and type of generation.
 def get_dataframe(cur,
-									out_columns,
-									table="ELEC",
-									series_type='Net Generation',
-									state='Oregon',
-									gen_type='solar',
-									freq='M'):
+		  out_columns,
+		  table="ELEC",
+		  series_type='Net Generation',
+		  state='Oregon',
+		  gen_type='solar',
+		  freq='M'):
 	q = safe_sql_query(table,out_columns,series_type,state,gen_type,freq)
 	cur.execute(q);
 	df0=cur.fetchall();
