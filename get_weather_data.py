@@ -38,9 +38,9 @@ biggest_cities=[
     ['MD','Baltimore','Frederick','Gaithersburg'],
     ['MA','Boston','Worcester','Springfield'],
     ['MI','Detroit','Grand Rapids','Warren'],
-    ['MN','Minneapolis','Saint Paul','Rochester'],
+    ['MN','Minneapolis','St. Paul','Rochester'],
     ['MS','Jackson','Gulfport','Biloxi'],
-    ['MO','Kansas City','Saint Louis','Springfield'],
+    ['MO','Kansas City','St. Louis','Springfield'],
     ['MT','Billings','Missoula','Great Falls'],
     ['NE','Omaha','Lincoln','Bellevue'],
     ['NV','Las Vegas','Reno','Henderson'],
@@ -67,60 +67,53 @@ biggest_cities=[
     ['WI','Milwaukee','Madison','Green Bay'],
     ['WY','Cheyenne','Casper','Laramie']];
 
-#read in DataFrame of largest 3 cities in each US state. (list from Wikipedia)
-def make_bigcity_list(biggest_city,depth=3):
-    names=['State','L1','L2','L3']
-    nrows = len(biggest_cities);
-    biggest_city_list=list()
-    #now make a list of "city,state" pairs
-    for i in range(0,nrows):
-        for j in range(1,depth+1):
-            city_str=biggest_cities[i][j]+', '+biggest_cities[i][0]
-            biggest_city_list.append(city_str)
+# #read in DataFrame of largest 3 cities in each US state. (list from Wikipedia)
+# def make_bigcity_list(biggest_city,depth=3):
+#     names=['State','L1','L2','L3']
+#     nrows = len(biggest_cities);
+#     biggest_city_list=list()
+#     #now make a list of "city,state" pairs
+#     for i in range(0,nrows):
+#         for j in range(1,depth+1):
+#             city_str=biggest_cities[i][j]+', '+biggest_cities[i][0]
+#             biggest_city_list.append(city_str)
 
-    return biggest_city_list    
+#     return biggest_city_list    
 
-city_list=make_bigcity_list(biggest_cities,depth=3)
+# city_list=make_bigcity_list(biggest_cities,depth=3)
 
 #read in list of airports
 airport_df = pd.read_csv('data/airports.dat',skiprows=1,na_values='\\N')
-
+print(len(airport_df))
+#only keep US airports, and name,city, and ICAO codes
+msk2=airport_df['Country']=='United States'
+airport_df=airport_df[msk2][['Name','City','ICAO']]
+print(len(airport_df))
 
 # #now make a dict of city names, and station locations.
 # #Find allowed ID number corresponding to largest cities.
 # #Note not all of these have entries.  
 def get_airport_code(dataframe,city_list,depth=3):
-    loc_dict=dict()
+    aircode_df=pd.DataFrame()
     nrows=len(city_list)
     for i in range(0,nrows):
         for j in range(1,depth+1):
             city=city_list[i][j]
-            msk1=dataframe['City'].str.contains(city)
-            msk2=dataframe['Country']=='United States'
-            msk_tot=msk1&msk2
-            #If more than one entry Pick out the international airport.
-            if (sum(msk_tot)>1):
-                #print('Multiple airports in city')
-                df_small = dataframe[msk_tot]
-                msk3=df_small['Name'].str.contains('International')
-                msk_tot=msk_tot&msk3
-                if (sum(msk_tot)<1):
-                    print('No international airport either?')
-                    print(df_small[['Name','City','ICAO']])
-                    code=None
-                else:
-                    code=df_small['ICAO'][msk_tot]
-            elif (sum(msk_tot)==1):
-                code=dataframe['ICAO'][msk_tot]
+            state=city_list[i][0]
+            msk=dataframe['City'].str.contains(city)
+            #If more than one entry, just pick the first one.
+            if (sum(msk)>=1):
+                df_small=dataframe[msk].head(n=1)
+                df_small['State']=state
+                aircode_df=aircode_df.append(df_small)
             else:
-                #print('could not find city:'+city)
-                code=None
-            loc_dict[city]=code
-    return loc_dict
-
+                print('could not find city:'+city)
+    return aircode_df
 
 airport_codes=get_airport_code(airport_df,biggest_cities)
 
+
+#now compare with stations from ISD database
 
 
 # #Find all cities with Local Climatological Data.
