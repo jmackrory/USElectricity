@@ -3,17 +3,13 @@ import requests
 import json
 import pandas as pd
 import numpy as np
+import ftplib 
+
 
 #Get API keys from JSON file
 with open('keys.json') as key_file:
     keys=json.load(key_file)
 #NCDC's call to website.
-#Look at Local Climatological Data
-data_name='LCD'
-
-baseurl='https://www.ncdc.noaa.gov/cdo-web/api/v2/'
-h1={'token':keys['ncdc']}
-
 
 biggest_cities=[
     ['AL','Birmingham','Mobile','Huntsville'],
@@ -79,7 +75,6 @@ biggest_cities=[
 #             biggest_city_list.append(city_str)
 
 #     return biggest_city_list    
-
 # city_list=make_bigcity_list(biggest_cities,depth=3)
 
 #read in list of airports
@@ -108,14 +103,45 @@ def get_airport_code(dataframe,city_list,depth=3):
                 aircode_df=aircode_df.append(df_small)
             else:
                 print('could not find city:'+city)
+    aircode_df=aircode_df.rename(columns={'ICAO':'CALL'})
     return aircode_df
 
 airport_codes=get_airport_code(airport_df,biggest_cities)
 
+#now compare with stations from ISD database.
+isd_name_df=pd.read_fwf('data/ISD/isd-history.txt',skiprows=20)
+isd_name_df=isd_name_df[['USAF','WBAN','CALL']]
 
-#now compare with stations from ISD database
+#merge together.
+airport_codes2 = pd.merge(airport_codes,isd_name_df,on='CALL')
+
+#drop the entries with 999999.
+msk1 = airport_codes2['USAF']!=999999
+msk2 = airport_codes2['WBAN']!=99999
+airport_codes2=airport_codes2[msk1&msk2]
+
+#now download the data from NOAA:
+
+# def noaa_ftp():
+#     ftp=ftplib.FTP('ftp.ncdc.noaa.gov')
+#     ftp.cwd('pub/data/noaa/isd-lite')
+#     return ftp
 
 
+# def download_city_data(ftp,USAF,WBAN,yearstr):
+#     ftp.cwd(str(yearstr))
+
+#     cmd_name='RETR '+USAF+'-'+WBAN+'-'+yearstr+'.gz'
+#     ftp.retrbinary(cmd_name)
+
+def wget_data(USAF,WBAN,yearstr):
+    base_url='ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-lite'
+    url=base_url+'/'+yearstr+'/'+USAF+'-'+WBAN+'-'yearstr'.gz'
+    wget.download(url,out='data/ISD')
+# ftp=noaa_ftp()
+# cd data/isd_data
+
+    
 # #Find all cities with Local Climatological Data.
 # #This dataset has hourly temperature/preciptation measurements.
 # def get_lcd_data_locations():
@@ -164,15 +190,6 @@ def get_ids(dataframe,loc_list):
         loc_dict[city]=id
     return loc_dict
 
-# city_dict=get_ids(lcd_frame,city_list)
-# #only interested in last few years for this particular project.
-# #Download data for those cities.
-# dataset='GHCND'
-# datatype='TEMP'
-# loc='Portland, OR'
-# start='2016-05-01'
-# end='2016-05-01'
-# loc_id='ZIP:97218'#city_dict[loc]
 
 # #works?
 # url0='https://www.ncdc.noaa.gov/cdo-web/api/v2/'\
