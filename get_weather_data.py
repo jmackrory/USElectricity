@@ -3,7 +3,9 @@ import requests
 import json
 import pandas as pd
 import numpy as np
-import ftplib 
+import matplotlib.pyplot as plt
+from mpl_toolkits.basemap import Basemap
+import pickle
 
 # #Get API keys from JSON file
 # with open('keys.json') as key_file:
@@ -62,7 +64,6 @@ biggest_cities=[
     ['WI','Milwaukee','Madison','Green Bay'],
     ['WY','Cheyenne','Casper','Laramie']];
 
-
 # #now make a dict of city names, and station locations.
 # #Find allowed ID number corresponding to largest cities.
 # #Note not all of these have entries.  
@@ -93,33 +94,65 @@ def get_airport_code(dataframe,city_list,depth=3):
     aircode_df=aircode_df.rename(columns={'ICAO':'CALL'})
     return aircode_df
 
-#read in list of airports
-airport_df = pd.read_csv('data/airports.dat',skiprows=1,na_values='\\N')
-print(len(airport_df))
-#only keep US airports, and name,city, and ICAO codes
-msk2=airport_df['Country']=='United States'
-airport_df=airport_df[msk2][['Name','City','ICAO']]
-print(len(airport_df))
+def make_airport_df():
+    """make_airport_df
+    Read in a list of global airports, and extract their ICAO codes.
+    Then cross-reference with USAF-WBAN codes for the weather stations at these
+    airports.  Return a dataframe of those codes/numbers for just a few of the biggest cities in 
+    each state in the US.
+    """
+    #read in list of airports
+    airport_df = pd.read_csv('data/airports.dat',skiprows=1,na_values='\\N')
+    print(len(airport_df))
+    #only keep US airports, and name,city, and ICAO codes
+    msk2=airport_df['Country']=='United States'
+    airport_df=airport_df[msk2][['Name','City','ICAO']]
+    print(len(airport_df))
 
-airport_codes=get_airport_code(airport_df,biggest_cities)
+    airport_codes=get_airport_code(airport_df,biggest_cities)
+    
+    #now compare with stations from ISD database.
+    isd_name_df=pd.read_fwf('data/ISD/isd-history.txt',skiprows=20)
+    #also only keep airports still operational in time period.
+    msk = isd_name_df['END']>20150000
+    isd_name_df=isd_name_df[msk]
+    isd_name_df=isd_name_df[['USAF','WBAN','CALL','LAT',"LON"]]
+    
+    #merge together.
+    airport_codes2 = pd.merge(airport_codes,isd_name_df,on='CALL')
+    
+    #drop the entries with 999999. Presumed to be duplicates.
+    msk1 = airport_codes2['USAF']!=999999
+    msk2 = airport_codes2['WBAN']!=99999
+    airport_codes2=airport_codes2[msk1&msk2]
+    #make these codes integers.
+    airport_codes2['USAF']=airport_codes2['USAF'].astype(int)
+    airport_codes2['WBAN']=airport_codes2['WBAN'].astype(int)
+    
+    return airport_codes2
 
-#now compare with stations from ISD database.
-isd_name_df=pd.read_fwf('data/ISD/isd-history.txt',skiprows=20)
-#also only keep airports still operational in time period.
-msk = isd_name_df['END']>20150000
-isd_name_df=isd_name_df[msk]
-isd_name_df=isd_name_df[['USAF','WBAN','CALL']]
+def plot_airports(air_df):
+    try:
+        m=pickle.load(open('usstates.pickle','rb'))
+        print('Loading Map from pickle')
+    except:
+    #if not, remake the Basemap (costs lots of time)
+        plt.figure()  
+        print('Creating Fine BaseMap and storing with pickle')
+        m=Basemap(projection='merc',llcrnrlon=-130,llcrnrlat=25,
+                  urcrnrlon=-65,urcrnrlat=50,resolution='l', 
+                  lon_0=-115, lat_0=35)
+        m.drawstates()
+        m.drawcountries()
+        pickle.dump(m,open('usstates.pickle','wb'),-1)
+    #actually draw the map
+    m.drawcoastlines()
+    lons = air_df['LON']
+    lats = air_df['LAT']
+    m.scatter(lons,lats,latlon=True)
+    pl.show()
+    return
 
-#merge together.
-airport_codes2 = pd.merge(airport_codes,isd_name_df,on='CALL')
-
-#drop the entries with 999999. Presumed to be duplicates.
-msk1 = airport_codes2['USAF']!=999999
-msk2 = airport_codes2['WBAN']!=99999
-airport_codes2=airport_codes2[msk1&msk2]
-#make these codes integers.
-airport_codes2['USAF']=airport_codes2['USAF'].astype(int)
-airport_codes2['WBAN']=airport_codes2['WBAN'].astype(int)
 
 #now download the data from NOAA:
 def wget_data(USAF,WBAN,yearstr,city,airport):
@@ -207,7 +240,8 @@ def convert_isd_to_df(filename,city,state):
                           'day':df['day'],
                           'hour':df['hour']})
     df.index=pd.DatetimeIndex(times)
-
+    df['state']=state
+    df['city']=city
     #df=pd.read_fwf(filename,compression='gzip',na_values='-9999')
     
     return df
