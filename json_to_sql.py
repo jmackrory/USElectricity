@@ -19,6 +19,15 @@ from psycopg2 import sql
 
 #Make new database by logging into 
 def create_new_database(database_name):
+    """create_new_database(database_name)
+
+    Make a new SQL database with a given name.
+    Uses the "master" database to start working from.
+
+    database_name: name of the new database.
+
+    """
+    
     conn=psycopg2.connect(dbname='jonathan',host='localhost')
     #need elevated permissions in order to create a new database from within python, to automatically
     #commit changes.
@@ -37,6 +46,13 @@ def create_new_database(database_name):
 
 #Create fresh table in a database by dropping the old one, and putting a new blank one in.
 def create_fresh_table(database_name, table_name,init_column='name'):
+    """create_fresh_table(database_name, table_name,init_column='name')
+    Makes a new SQL table (and overwrites any existing table).
+
+    database_name:name of the SQL database to connect to
+    table_name:name of SQL table to create
+    init_column:initial name of the column to insert
+    """
     conn=psycopg2.connect(dbname=database_name,host='localhost')
     conn.set_session(autocommit=True)
     cur = conn.cursor()
@@ -65,7 +81,14 @@ def create_fresh_table(database_name, table_name,init_column='name'):
 
 #Make sure required columns are present.
 def check_and_create_columns(table_name,cur,df):
+    """check_and_create_columns(table_name,cur,df)
+    Checks SQL table has columns for all of the columns
+    in a given dataframe.  
 
+    table_name: SQL table name
+    cur: SQLalchemy cursor to the connected SQL database
+    df: pandas dataframe we want to insert into the SQL table.
+    """
     for column_name in df.columns:
         t1 = sql.Identifier(table_name)
         c1 = sql.Identifier(column_name)
@@ -88,10 +111,21 @@ def check_and_create_columns(table_name,cur,df):
 # "split -l 100 -d fname.txt split_data/fname"
 # to break initial files into smaller chunks.
 def put_data_into_sql(base_file_tag,table_name,cur,engine):
+    """put_data_int_sql(base_file_tag,table_name,cur,engine)
+    Load data that has been split into small files, first into data frame.
+    Convert any series into strings to store the whole series at once.  
+    Then inject those into a SQL database.  
+
+    base_file_tag: tag for the split files
+    table_name: SQL table to insert data into
+    cur: sqlalchemy cursor to the SQL database
+    engine: sqlalchemy engine to SQL database.
+
+    """
     path='data/split_data/'
     flist=os.listdir(path)
     flist.sort()
-    flist=flist[0:2]
+    #flist=flist[0:2]
     for fn in flist:
         if fn.find(base_file_tag) >= 0:
             print('Reading in :'+fn)
@@ -123,4 +157,3 @@ create_new_database(database_name)
 ##NB: Erases old table!
 conn,cur=create_fresh_table(database_name,table_name)
 put_data_into_sql(fname,table_name,cur,engine)
-
