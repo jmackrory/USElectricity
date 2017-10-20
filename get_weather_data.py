@@ -67,6 +67,15 @@ biggest_cities=[
 # #Find allowed ID number corresponding to largest cities.
 # #Note not all of these have entries.  
 def get_airport_code(dataframe,city_list,depth=3):
+    """get_airport_code(dataframe,city_list,depth=3)
+    Extract the ICAO code/callsign for one airport in each city.
+    Return a dataframe with the city,state and callsign.
+    
+    dataframe: initial dataframe with list of global airports, locations, ICAO callsigns.
+    city_list: list of lists cities to find the callsigns for. Containts cities in states.
+    depth: how many cities in each state to look for.  
+
+"""
     aircode_df=pd.DataFrame()
     nrows=len(city_list)
     for i in range(0,nrows):
@@ -104,26 +113,49 @@ isd_name_df=isd_name_df[['USAF','WBAN','CALL']]
 #merge together.
 airport_codes2 = pd.merge(airport_codes,isd_name_df,on='CALL')
 
-#drop the entries with 999999.
+#drop the entries with 999999. Presumed to be duplicates.
 msk1 = airport_codes2['USAF']!=999999
 msk2 = airport_codes2['WBAN']!=99999
 airport_codes2=airport_codes2[msk1&msk2]
-
+#make these codes integers.
 airport_codes2['USAF']=airport_codes2['USAF'].astype(int)
 airport_codes2['WBAN']=airport_codes2['WBAN'].astype(int)
 
 #now download the data from NOAA:
 def wget_data(USAF,WBAN,yearstr,city,airport):
-    base_url='ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-lite'
-    #put in some padding {:0>5} for shorter codes.
-    url=base_url+"/{0}/{1}-{2:0>5}-{0}.gz".format(yearstr,str(USAF),str(WBAN))
+    """wget_data(USAF,WBAN,yearstr,city,airport)
+    Download automated weather station data from NOAA for a given year at a given airport.
+    
+    USAF: USAF 6 digit code for airport.
+    WBAN: NOAA code for weather station at airport
+    yearstr: a string containing the 4 digit year.
+    city: city the airport is located in
+    airport: Name of the airport.
+    """
+
+    base_url='ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-lite/'
+    url=base_url+isd_filename(yearstr,USAF,WBAN)
     try:
         wget.download(url,out='data/ISD')
     except:
         print('could not download data from city:',city,airport)
 
+def isd_filename(yearstr,USAF,WBAN):
+    """ isd_filename(yearstr,USAF,WBAN)
+    Make filename corresponding to zipped file names used in ISD database.
+    """
+    #put in some padding {:0>5} for shorter codes.
+    fn="{0}/{1}-{2:0>5}-{0}.gz".format(yearstr,str(USAF),str(WBAN))
+    return fn
+        
 #download weather data for all of the airports specified in aircode
 def get_all_data(aircode,years=['2015','2016','2017']):
+    """get_all_data(aircode,years=['2015','2016','2017'])
+    Download the data for all airports we could find weather stations for in desired cities.
+
+    aircode: datafram containing airport codes, NOAA station numbers, airports
+    years: array of strings for the years to seek data.
+    """
     for yearstr in years:
         for i in range(len(aircode)):
             ap = aircode.iloc[i]
@@ -138,8 +170,6 @@ def get_all_data(aircode,years=['2015','2016','2017']):
 
 #now read it in, convert to time-series.
 
-
-
 def convert_isd_to_df(filename,city,state):
     """
     convert_to_df(filename)
@@ -148,10 +178,7 @@ def convert_isd_to_df(filename,city,state):
     Data is space separated columns, with format given in
     "isd-lite-format.txt".
     Converts to pandas dataframe using date/time columns as DateTimeIndex.
-    with other variables 
-    """
-
-    """Format info:
+    Format info:
     1: Year
     2: Month
     3: Day
@@ -189,4 +216,7 @@ fn = 'data/ISD/702650-26407-2015.gz'
 city='Blah'
 state='MEH'
 
+
 df=convert_isd_to_df(fn,city,state)
+
+
