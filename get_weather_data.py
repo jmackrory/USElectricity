@@ -132,6 +132,11 @@ def make_airport_df():
     return airport_codes2
 
 def plot_airports(air_df):
+    """plot_airports(air_df)
+    Plot the locations of the airports contained within air_df.
+    Useful for eyeballing if there are systematic flaws in the locations 
+    that made the cut.
+    """
     try:
         m=pickle.load(open('usstates.pickle','rb'))
         print('Loading Map from pickle')
@@ -147,10 +152,10 @@ def plot_airports(air_df):
         pickle.dump(m,open('usstates.pickle','wb'),-1)
     #actually draw the map
     m.drawcoastlines()
-    lons = air_df['LON']
-    lats = air_df['LAT']
+    lons = air_df['LON'].values
+    lats = air_df['LAT'].values
     m.scatter(lons,lats,latlon=True)
-    pl.show()
+    plt.show()
     return
 
 
