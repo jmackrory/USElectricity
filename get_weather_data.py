@@ -64,6 +64,63 @@ biggest_cities=[
     ['WI','Milwaukee','Madison','Green Bay'],
     ['WY','Cheyenne','Casper','Laramie']];
 
+
+#try to map states to power producing regions.
+#This is not quite correct, since some states are split between
+#multiple regions (TN, MS, ND).  But will try as first attempt.
+region_dict={
+    'AL':'Southeast',
+    'AK':'AK',
+    'AZ':'Southwest',
+    'AR':'Midwest',
+    'CA':'California',
+    'CO':'Northwest',
+    'CT':'Northeast',
+    'DE':'Northeast',
+    'FL':'Florida',
+    'GA':'Southeast',
+    'HI':'HI',
+    'ID':'Northwest',
+    'IL':'Midwest',
+    'IN':'Midwest',
+    'IA':'Midwest',
+    'KS':'Central',
+    'KY':'Mid-Atlantic',
+    'LA':'Midwest',
+    'ME':'Northeast',
+    'MD':'Mid-Atlantic',
+    'MA':'Northeast',
+    'MI':'Midwest',
+    'MN':'Midwest',
+    'MS':'Midwest',
+    'MO':'Midwest',
+    'MT':'Northwest',
+    'NE':'Central',
+    'NV':'Southwest',
+    'NH':'Northeast',
+    'NJ':'Mid-Atlantic',
+    'NM':'Southwest',
+    'NY':'New York',
+    'NC':'Carolinas',
+    'ND':'Central',
+    'OH':'Mid-Atlantic',
+    'OK':'Central',
+    'OR':'Northwest',
+    'PA':'Mid-Atlantic',
+    'RI':'Northeast',
+    'SC':'Carolinas',
+    'SD':'Central',
+    'TN':'Tennessee',
+    'TX':'Texas',
+    'UT':'Northwest',
+    'VT':'New England',
+    'VA':'Mid-Atlantic',
+    'WA':'Northwest',
+    'WV':'Mid-Atlantic',
+    'WI':'Midwest',
+    'WY':'Northwest'}
+
+
 # #now make a dict of city names, and station locations.
 # #Find allowed ID number corresponding to largest cities.
 # #Note not all of these have entries.  
@@ -137,11 +194,12 @@ def plot_airports(air_df):
     Useful for eyeballing if there are systematic flaws in the locations 
     that made the cut.
     """
-    try:
-        m=pickle.load(open('usstates.pickle','rb'))
-        print('Loading Map from pickle')
-    except:
+    # try:
+    #     m=pickle.load(open('usstates.pickle','rb'))
+    #     print('Loading Map from pickle')
+    # except:
     #if not, remake the Basemap (costs lots of time)
+    try:
         plt.figure()  
         print('Creating Fine BaseMap and storing with pickle')
         m=Basemap(projection='merc',llcrnrlon=-130,llcrnrlat=25,
@@ -149,15 +207,16 @@ def plot_airports(air_df):
                   lon_0=-115, lat_0=35)
         m.drawstates()
         m.drawcountries()
+        m.drawcoastlines()
         pickle.dump(m,open('usstates.pickle','wb'),-1)
-    #actually draw the map
-    m.drawcoastlines()
+    except:
+        print(meh)
+        #actually draw the map
     lons = air_df['LON'].values
     lats = air_df['LAT'].values
     m.scatter(lons,lats,latlon=True)
     plt.show()
     return
-
 
 #now download the data from NOAA:
 def wget_data(USAF,WBAN,yearstr,city,airport):
@@ -170,7 +229,6 @@ def wget_data(USAF,WBAN,yearstr,city,airport):
     city: city the airport is located in
     airport: Name of the airport.
     """
-
     base_url='ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-lite/'
     url=base_url+isd_filename(yearstr,USAF,WBAN)
     try:
@@ -247,6 +305,7 @@ def convert_isd_to_df(filename,city,state):
     df.index=pd.DatetimeIndex(times)
     df['state']=state
     df['city']=city
+    df['region']=region_dict[state]
     #df=pd.read_fwf(filename,compression='gzip',na_values='-9999')
     
     return df
@@ -255,7 +314,5 @@ fn = 'data/ISD/702650-26407-2015.gz'
 city='Blah'
 state='MEH'
 
-
 df=convert_isd_to_df(fn,city,state)
-
 
