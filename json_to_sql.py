@@ -125,7 +125,7 @@ def put_data_into_sql(base_file_tag,table_name,cur,engine):
     path='data/split_data/'
     flist=os.listdir(path)
     flist.sort()
-    #flist=flist[0:2]
+    flist=flist[0:2]
     for fn in flist:
         if fn.find(base_file_tag) >= 0:
             print('Reading in :'+fn)
@@ -146,6 +146,23 @@ def put_data_into_sql(base_file_tag,table_name,cur,engine):
         check_and_create_columns(table_name,cur,df)
         df.to_sql(table_name,engine,index=False,if_exists='append');        
 
+
+def transpose_df(df,data_series):
+    """transpose_df(df,dataseries)
+    Transposes a dataframe with many time series to use a common time index, with columns 
+    given by the names.
+
+    """
+    names=df['name'].values
+    Tindex=data_series[0].index
+    df_new=pd.DataFrame(columns=names,index=Tindex)
+
+    for i in range(len(df)):
+        name=names[i]
+        df_new[name]=data_series[i]
+    return df_new
+
+
 # #Borrowed from Introducing Python pg 180.
 database_name='US_ELEC'
 fname='EBA'
@@ -157,3 +174,4 @@ create_new_database(database_name)
 ##NB: Erases old table!
 conn,cur=create_fresh_table(database_name,table_name)
 put_data_into_sql(fname,table_name,cur,engine)
+
