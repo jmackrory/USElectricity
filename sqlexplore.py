@@ -28,44 +28,72 @@ column_names=['name','series_id','data','interval','start','end','units']
 #make safe SQL queries, with deired list of columns in "out_columns".
 #Assume we are searching through name for entries with desired type of series, for particular states,
 #as well as generation type.
-def safe_sql_query(table_name,
-		   out_columns,
-		   series_type='Net generation', 
-		   state='Oregon',
-		   gen_type='all',
-		   freq='M'):
-	#make up categories to match the name by. 
-	query_match_list=list()
-	l1 = sql.Literal(series_type+' :%')
-	l2 = sql.Literal('%: '+state+' :%')
-	l3 = sql.Literal('%'+gen_type+'%')
-	#join together these matches with ANDs to match them all
-	like_query=sql.SQL(' AND name LIKE ').join([l1,l2,l3])
 
-	#Total SQL query to select desired columns with features 
-	q1 = sql.SQL("SELECT {} FROM {} WHERE (name LIKE {} AND f LIKE {}) ").format(
-        sql.SQL(' ,').join(map(sql.Identifier,out_columns)),
+
+
+def safe_sql_query(table_name, out_columns, match_names, freq):
+    col_query=sql.SQL(' ,').join(map(sql.Identifier,out_columns))
+    #make up categories to match the name by.
+    namelist=[];
+    for namevar in match_names:
+        namelist.append(sql.Literal('%'+namevar+'%'))
+        #join together these matches with ANDs to match them all
+        name_query=sql.SQL(' AND name LIKE ').join(namelist)
+    #Total SQL query to select desired columns with features 
+    q1 = sql.SQL("SELECT {0} FROM {1} WHERE (name LIKE {2} AND f LIKE {3}) ").format(
+        col_query,
         sql.Identifier(table_name),
-        like_query,
+        name_query,
         sql.Literal(freq))
+    return(q1)
 
-	return(q1)
+# def safe_sql_query(table_name,
+# 		   out_columns,
+# 		   series_type='Net generation', 
+# 		   state='Oregon',
+# 		   gen_type='all',
+# 		   freq='M'):
+# 	#make up categories to match the name by. 
+# 	query_match_list=list()
+# 	l1 = sql.Literal(series_type+' :%')
+# 	l2 = sql.Literal('%: '+state+' :%')
+# 	l3 = sql.Literal('%'+gen_type+'%')
+# 	#join together these matches with ANDs to match them all
+# 	like_query=sql.SQL(' AND name LIKE ').join([l1,l2,l3])
+
+# 	#Total SQL query to select desired columns with features 
+# 	q1 = sql.SQL("SELECT {} FROM {} WHERE (name LIKE {} AND f LIKE {}) ").format(
+#         sql.SQL(' ,').join(map(sql.Identifier,out_columns)),
+#         sql.Identifier(table_name),
+#         like_query,
+#         sql.Literal(freq))
+
+# 	return(q1)
+
 
 #Get a dataframe from SQL database for given psycopg2 cursor,
 #with desired output columns.  
 #Must select data based on series type, state, and type of generation.
-def get_dataframe(cur,
-		  out_columns,
-		  table="ELEC",
-		  series_type='Net Generation',
-		  state='Oregon',
-		  gen_type='solar',
-		  freq='M'):
-	q = safe_sql_query(table,out_columns,series_type,state,gen_type,freq)
-	cur.execute(q);
-	df0=cur.fetchall();
-	df = pd.DataFrame(df0,columns=out_columns);
-	return df
+
+def get_dataframe(cur, table_name, out_columns, match_names, freq):
+    q = safe_sql_query(table_name,out_columns,match_names,freq)
+    cur.execute(q);
+    df0=cur.fetchall();
+    df = pd.DataFrame(df0,columns=out_columns);
+    return df
+
+# def get_dataframe(cur,
+# 		  out_columns,
+# 		  table="ELEC",
+# 		  series_type='Net Generation',
+# 		  state='Oregon',
+# 		  gen_type='solar',
+# 		  freq='M'):
+# 	q = safe_sql_query(table,out_columns,series_type,state,gen_type,freq)
+# 	cur.execute(q);
+# 	df0=cur.fetchall();
+# 	df = pd.DataFrame(df0,columns=out_columns);
+# 	return df
 
 #Make a list of lists, with first sublist entry as time, second sublist entry is data
 #into a pandas timeseries.  Extract the interval from the geoset ID, and use to construct 
@@ -111,17 +139,6 @@ def convert_df(df):
 # q=safe_sql_query(table_name="ELEC",out_columns=('name','series_id'),gen_type='solar')
 # print(q.as_string(conn))
 # cur.execute(q)
-
-#identify useful fields. name, series_id.
-
-#Try to select data from fields with names such as net generation and desired state.
-#Possibly also by electricity source.  Nuclear/Solar/Wind/Gas/Coal etc.  
-
-#Useful fields: Net Generation : state : type
-#Also interesting: Average retail price of electricity.  
-#Net generation
-#Retail sales of electricity
-#Revenue
 
 #Can Identify useful tags by splitting at colons":"
 out_col=('name','data','f')
