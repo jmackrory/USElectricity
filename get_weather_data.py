@@ -1,9 +1,11 @@
 # Download data sets from NOAA.
+#See weather_dataframe.py for converting this data into a combined 
 import requests
 import json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import wget
 from mpl_toolkits.basemap import Basemap
 import pickle
 
@@ -151,42 +153,65 @@ def get_airport_code(dataframe,city_list,depth=3):
     aircode_df=aircode_df.rename(columns={'ICAO':'CALL'})
     return aircode_df
 
-def make_airport_df():
-    """make_airport_df
-    Read in a list of global airports, and extract their ICAO codes.
-    Then cross-reference with USAF-WBAN codes for the weather stations at these
-    airports.  Return a dataframe of those codes/numbers for just a few of the biggest cities in 
-    each state in the US.
-    """
-    #read in list of airports
-    airport_df = pd.read_csv('data/airports.dat',skiprows=1,na_values='\\N')
-    print(len(airport_df))
-    #only keep US airports, and name,city, and ICAO codes
-    msk2=airport_df['Country']=='United States'
-    airport_df=airport_df[msk2][['Name','City','ICAO']]
-    print(len(airport_df))
+# def make_airport_df():
+#     """make_airport_df
+#     Read in a list of global airports, and extract their ICAO codes.
+#     Restrict then to US cities.
+#     """
+#     #read in list of airports
+airport_df = pd.read_csv('data/airports.dat',skiprows=1,na_values='\\N')
+#only keep US airports, and name,city, and ICAO codes
+msk2=airport_df['Country']=='United States'
+#airport_df=airport_df[msk2][['Name','City','ICAO']]
+airport_df=airport_df[msk2]#[['Name','City','ICAO']]
 
-    airport_codes=get_airport_code(airport_df,biggest_cities)
-    
+airport_codes=get_airport_code(airport_df,biggest_cities)
+
+#return airport_codes
+
+def read_isd_df():
+    """make_airport_df
+    Read in list of weather stations and USAF-WBAN codes for the weather stations.  
+    Trim to only stations that have operated since 2015.
+    """
+
     #now compare with stations from ISD database.
     isd_name_df=pd.read_fwf('data/ISD/isd-history.txt',skiprows=20)
     #also only keep airports still operational in time period.
     msk = isd_name_df['END']>20150000
     isd_name_df=isd_name_df[msk]
     isd_name_df=isd_name_df[['USAF','WBAN','CALL','LAT',"LON"]]
+    return isd_name_df
+
+def merge_air_isd(airport_codes,isd_name_df):
+    """merge_air_isd_df
     
-    #merge together.
-    airport_codes2 = pd.merge(airport_codes,isd_name_df,on='CALL')
+    Merge the airport and weather data frames on name.
+    Trim out duplicates.
+
+    """
+    airport_total = pd.merge(airport_codes,isd_name_df,on='CALL')
     
-    #drop the entries with 999999. Presumed to be duplicates.
-    msk1 = airport_codes2['USAF']!=999999
-    msk2 = airport_codes2['WBAN']!=99999
-    airport_codes2=airport_codes2[msk1&msk2]
+    #drop any duplicated entries. (i.e. multiple at same airport)
+    msk3 = airport_total['CALL'].duplicated().values
+    print('Duplicated values for:')
+    print(airport_total[msk3,['CALL','City']])
+    airport_total=airport_total[~msk3]
+    # msk1 = airport_codes2['USAF']!=999999
+    # msk2 = airport_codes2['WBAN']!=99999
+    # airport_codes2=airport_codes2[msk1&msk2]
+    
     #make these codes integers.
-    airport_codes2['USAF']=airport_codes2['USAF'].astype(int)
-    airport_codes2['WBAN']=airport_codes2['WBAN'].astype(int)
+    airport_total['USAF']=airport_total['USAF'].astype(int)
+    airport_total['WBAN']=airport_total['WBAN'].astype(int)
     
-    return airport_codes2
+    return airport_total
+
+# airport_codes=make_airport_df()
+# isd_names=read_isd_df()
+air_df=merge_air_isd(airport_codes,isd_names)
+
+
 
 def plot_airports(air_df):
     """plot_airports(air_df)
@@ -232,9 +257,11 @@ def wget_data(USAF,WBAN,yearstr,city,airport):
     base_url='ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-lite/'
     url=base_url+isd_filename(yearstr,USAF,WBAN)
     try:
+        print('trying: {}\n'.format(url))
         wget.download(url,out='data/ISD')
     except:
-        print('could not download data from city:',city,airport)
+        print('\n could not download data from city:',city,airport)
+
 
 def isd_filename(yearstr,USAF,WBAN):
     """ isd_filename(yearstr,USAF,WBAN)
@@ -262,7 +289,7 @@ def get_all_data(aircode,years=['2015','2016','2017']):
             wget_data(usaf,wban,yearstr,city,airport)
     return None
 ##actually download that data
-#get_all_data(airport_codes2)
+## get_all_data(air_df)
 
 #now read it in, convert to time-series.
 
@@ -303,16 +330,40 @@ def convert_isd_to_df(filename,city,state):
                           'day':df['day'],
                           'hour':df['hour']})
     df.index=pd.DatetimeIndex(times)
-    df['state']=state
-    df['city']=city
+    df['City,ST']=city+', '+state
+    #df['city']=city
     df['region']=region_dict[state]
     #df=pd.read_fwf(filename,compression='gzip',na_values='-9999')
     
     return df
 
-fn = 'data/ISD/702650-26407-2015.gz'
-city='Blah'
-state='MEH'
+# fn = 'data/ISD/702650-26407-2015.gz'
+# city='Blah'
+# state='MEH'
 
-df=convert_isd_to_df(fn,city,state)
+#df=convert_isd_to_df(fn,city,state)
 
+def convert_all_isd(air_df):
+    """convert_all_isd(air_df)
+    convert all the weather files for all stations and all years into 
+    one big data frame.
+    """
+    data_dir='data/ISD/'
+    df_tot=pd.DataFrame()
+    for i in range(len(air_df)):
+        for yearstr in ['2015','2016','2017']:
+            ap = air_df.iloc[i]
+            usaf=ap['USAF']
+            wban=ap['WBAN']
+            city=ap['City']
+            state=ap['State']
+            file_name=data_dir+"{0}-{1:0>5}-{2}.gz".format(usaf,wban,yearstr)
+            
+            df=convert_isd_to_df(file_name,city,state)
+            df_tot=df_tot.append(df)
+        print('done with {}'.format(ap['Name']))
+    return df_tot
+
+#d0=convert_all_isd(air_df)
+#converted file to csv to save time.
+#d0.to_csv('data/airport_weather.gz',compression='gzip')
