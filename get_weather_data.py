@@ -5,6 +5,7 @@ import json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 import wget
 from mpl_toolkits.basemap import Basemap
 import pickle
@@ -224,11 +225,6 @@ def merge_air_isd(airport_codes,isd_name_df):
     
     return airport_total
 
-# airport_codes=make_airport_df()
-# isd_names=read_isd_df()
-air_df=merge_air_isd(airport_codes,isd_names)
-
-
 def plot_airports(air_df):
     """plot_airports(air_df)
     Plot the locations of the airports contained within air_df.
@@ -273,13 +269,9 @@ def wget_data(USAF,WBAN,yearstr,city,airport):
     base_url='ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-lite/'
     file_name=isd_filename(yearstr,USAF,WBAN)
     url=base_url+file_name
-    local_file_name='data/ISD/'+file_name
     try:
-        if (os.path.exists(local_file_name)):
-            print( 'File {} already exists'.format(local_file_name))
-        else:
-            print('\n trying: {}'.format(url))
-            wget.download(url,out='data/ISD')
+        print('\n trying: {}'.format(url))
+        wget.download(url,out='data/ISD')
     except:
         print('\n could not download data from city:',city,airport)
     return None
@@ -309,8 +301,6 @@ def get_all_data(aircode,years=['2015','2016','2017']):
             airport=ap['Name']
             wget_data(usaf,wban,yearstr,city,airport)
     return None
-##actually download that data
-get_all_data(air_df)
 
 #now read it in, convert to time-series.
 
@@ -331,7 +321,7 @@ def convert_isd_to_df(filename,city,state):
     6: Dew point temperature (x10) in celcius
     7: Sea level pressure (x10 in hectopascals)
     8: Wind direction (degrees from north)
-    9: Wind speed 
+    9: Wind speed (x10 in meters per second)
     10: Cloud Coverage (categorical)
     11: Precipitation for One Hour (x10, in mm)
     12: Precipitation total for Six hours (x10 in mm)
@@ -344,27 +334,53 @@ def convert_isd_to_df(filename,city,state):
                'WindDir','WindSpeed','CloudCover',
                'Precip-1hr','Precip-6hr']
     df=pd.read_fwf(filename,compression='gzip',
-                   na_values='-9999',names=col_names)
-                   #parse_dates=[0,1,2,3],infer_datetime_format=True,
+                   na_values=['-9999','999'],names=col_names)
+    city_st=city+', '+state
+    df['city']=city
+    df['state']=state
+    df['city, state']=city_st
+    df['region']=region_dict[state]        
+    #make a time index.
     times=pd.to_datetime({'year':df['year'],
                           'month':df['month'],
                           'day':df['day'],
                           'hour':df['hour']})
-    df.index=pd.DatetimeIndex(times)
+    Tindex=pd.DatetimeIndex(times)
+    df.index=Tindex
+    #df.index=pd.MultiIndex.from_product([Tindex,[city_st]])
     #delete those columns
-    df.drop(['year','month','day','hour'])
-    df['City,ST']=city+', '+state
-    #df['city']=city
-    df['region']=region_dict[state]
-    
+    df=df.drop(labels=['year','month','day','hour'],axis=1)
     return df
-
 
 # fn = 'data/ISD/702650-26407-2015.gz'
 # city='Blah'
-# state='MEH'
+# state='OR'
             
-#df=convert_isd_to_df(fn,city,state)
+# df=convert_isd_to_df(fn,city,state)
+
+def convert_state_isd(air_df,ST):
+    """convert_all_isd(air_df)
+    convert the weather files for a particular state into 
+    one big data frame.
+    """
+    data_dir='data/ISD/'
+    Tindex=pd.DatetimeIndex(start='2015-07',end='2017-11',freq='h')
+    df_tot=pd.DataFrame(index=Tindex)
+    #select out only the entries for the desired state.
+    msk = air_df['State']==ST
+    air_msk=air_df[msk]
+    for i in range(len(air_msk)):
+        for yearstr in ['2015','2016','2017']:
+            ap = air_msk.iloc[i]
+            usaf=ap['USAF']
+            wban=ap['WBAN']
+            city=ap['City']
+            state=ap['State']
+            file_name="data/ISD/{1}-{2:0>5}-{0}.gz".format(yearstr,str(usaf),str(wban))
+            df=convert_isd_to_df(file_name,city,state)
+            df_tot=df_tot.append(df)
+        print('done with {}'.format(ap['Name']))
+    return df_tot
 
 def convert_all_isd(air_df):
     """convert_all_isd(air_df)
@@ -372,19 +388,51 @@ def convert_all_isd(air_df):
     one big data frame.
     """
     data_dir='data/ISD/'
-    df_tot=pd.DataFrame()
-    for i in range(len(air_df)):
+    Tindex=pd.DatetimeIndex(start='2015-07',end='2017-11',freq='h')
+    df_tot=pd.DataFrame(index=Tindex)
+    nmax=len(air_df)
+    for i in range(nmax):
         for yearstr in ['2015','2016','2017']:
             ap = air_df.iloc[i]
             usaf=ap['USAF']
             wban=ap['WBAN']
             city=ap['City']
             state=ap['State']
+            file_name="data/ISD/{1}-{2:0>5}-{0}.gz".format(yearstr,str(usaf),str(wban))
             df=convert_isd_to_df(file_name,city,state)
             df_tot=df_tot.append(df)
         print('done with {}'.format(ap['Name']))
     return df_tot
 
-#d0=convert_all_isd(air_df)
-#converted file to csv to save time.
-#d0.to_csv('data/airport_weather.gz',compression='gzip')
+# def make_weather_multiindex(air_df):
+#     #Tindex=pd.DatetimeIndex(start='2015-07',end='2017-11',freq='h')
+#     Tindex=pd.DatetimeIndex(start='2015-07',end='2016-03',freq='m')    
+#     city_list=list()
+#     nmax=4;#len(air_df)
+#     for i in range(nmax):
+#         ap = air_df.iloc[i]
+#         city=ap['City']
+#         state=ap['State']
+#         city_ST=city+', '+state
+#         city_list.append(city_ST)
+#     joint_index=pd.MultiIndex.from_product([Tindex,city_list])
+#     return joint_index
+
+#make dataframes with codes.
+try:
+    air_df=pd.read_csv('data/air_code_df.gz')
+except:
+    airport_codes=make_airport_df()
+    isd_names=read_isd_df()
+    air_df=merge_air_isd(airport_codes,isd_names)
+    #write output to csv
+    air_df.to_csv('data/air_code_df.gz',compression='gzip',header=True)
+
+#ind=make_weather_multiindex(air_df)
+    
+##actually download the data from 2015-2017 from the stations listed in air_code_df.  (takes a few minutes)
+#get_all_data(air_df)
+
+# d0=convert_all_isd(air_df)
+# # #converted file to csv to save time.
+# d0.to_csv('data/airport_weather.gz',compression='gzip',header=True)

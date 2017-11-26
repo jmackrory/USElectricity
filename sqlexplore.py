@@ -11,12 +11,12 @@ from psycopg2 import sql
 from sql_lib import create_conn_and_cur
 
 database_name='US_ELEC'
-fname='ELEC'
+fname='EBA_time'
 table_name=fname
 engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
 
 conn=psycopg2.connect(dbname=database_name,host='localhost')
-conn.set_session(autocommit=True)
+#conn.set_session(autocommit=True)
 cur = conn.cursor()
 
 #Goal: Convert data to TimeSeries, with dates in index.
@@ -28,8 +28,6 @@ column_names=['name','series_id','data','interval','start','end','units']
 #make safe SQL queries, with deired list of columns in "out_columns".
 #Assume we are searching through name for entries with desired type of series, for particular states,
 #as well as generation type.
-
-
 
 def safe_sql_query(table_name, out_columns, match_names, freq):
     col_query=sql.SQL(' ,').join(map(sql.Identifier,out_columns))
@@ -141,5 +139,5 @@ def convert_df(df):
 # cur.execute(q)
 
 #Can Identify useful tags by splitting at colons":"
-out_col=('name','data','f')
-df=get_dataframe(cur,out_col,series_type='Net generation',state='Oregon',gen_type='solar');
+# out_col=('name','data','f')
+# df=get_dataframe(cur,out_col,series_type='Net generation',state='Oregon',gen_type='solar');

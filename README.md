@@ -119,3 +119,5 @@ Appended the data frames to a SQL database for easier sectioning.
 (This is carried out in json_to_sql.py)
 
 Dropped columns:
+
+

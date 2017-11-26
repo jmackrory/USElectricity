@@ -252,32 +252,33 @@ def transpose_df(df,data_series):
         df_new[name]=data_series[i]
     return df_new
 
+#Regular EBA into SQL table.
+# # #Borrowed from Introducing Python pg 180.
+# database_name='US_ELEC'
+# fname='EBA'
+# table_name=fname
+# engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
+
+# #Make brand-new databases.  
+# create_new_database(database_name)
+# #Make new table NB: Erases old table!
+# conn,cur=create_fresh_table(database_name,table_name)
+# put_data_into_sql(fname,table_name,cur,engine)
+
 # #Borrowed from Introducing Python pg 180.
 database_name='US_ELEC'
 fname='EBA'
-table_name=fname
-engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
-
-#Make brand-new databases.  
-create_new_database(database_name)
-#Make new table NB: Erases old table!
-conn,cur=create_fresh_table(database_name,table_name)
-put_data_into_sql(fname,table_name,cur,engine)
-
-
-
-# #Borrowed from Introducing Python pg 180.
-database_name='US_ELEC'
-fname='EBA_time'
-table_name=fname
+table_name='EBA_time'
 engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
 
 #Make new table NB: Erases old table!
 conn,cur=create_fresh_table(database_name,table_name)
-put_data_into_sql(fname,table_name,cur,engine)
-
 #df_tot=transpose_all_data('EBA')
-df_tot.to_sql(table_name,engine,index=False,if_exists='replace');        
+df_small=df_tot.iloc[0:100,0:5]
+colfixed=collist.str.replace("\(region\)","- region")
+df_small.columns=colfixed
+check_and_create_columns(table_name,cur,df_small)
+df_small.to_sql(table_name,engine,if_exists='replace');        
 
-def put_time_df_to_sql(df,table_name,engine):
-    df.to_sql(table_name,engine,index=False,if_exists='replace');        
+# def put_time_df_to_sql(df,table_name,engine):
+#     df.to_sql(table_name,engine,index=False,if_exists='replace');        
