@@ -2,6 +2,9 @@
 # hourly electricity data from the EBA dataset, from the EIA.
 # Goes with EIA_explore.ipynb.
 
+import numpy as np
+import pandas as pd
+
 def remove_square_peak(Y,f,center,width):
     """remove_yearly
     Assumes there is a yearly trend.
