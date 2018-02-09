@@ -1,6 +1,25 @@
+"""
+Class for Multiseasonal demand model, ignoring temperature.
+"""
+
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 #Class for Multiseasonal model.
 #Implements multi-seasonal smoothing with two seasons.
 class multiseasonal(object):
+    """
+    Create multiseasonal demand model, ignoring temperature.
+    Key parameters are:
+    l - average level 
+    b - average gradient
+    s - seasonal pattern (2x24), with daily/weekend variants.
+    These are updated with parameters
+    alpha - l update
+    beta  - b update
+    gamma - 2x2 matrix for s update.
+    """
     def __init__(self, l=0,b=0,s=np.zeros((2,24)),  alpha=0.1,beta=0.1,gamma=0.1*np.ones((2,2))):
         self.l=l
         self.b=b
@@ -161,6 +180,13 @@ class multiseasonal(object):
         settled to a relative tolerance.
         Cost is root Mean Square Error over whole time series.
         Currently tries to predict day ahead.  
+        Input:
+        y - series to fit
+        ninit - number of values to use in initial parameter fitting
+        rtol - relative tolerance on parameters
+        eta - fraction for finite-difference step
+        lr  - learning rate
+        nmax - maximum number of iterations.
         """
         self.fit_init_params(y)
         #Super clunky way of specifiying names.
@@ -169,15 +195,16 @@ class multiseasonal(object):
         pred0 = self.STL_dayahead(y,ninit=ninit)
         J    = self.rmse(y[ninit:],pred0[ninit:])
         Ni=0
+        oldJ = J
         #loop over iterations
         for i in range(nmax):
             dJ_max=0
             #for each name, tweak the model's variables.
             eta=eta*0.99
             for n in names:
+                #do finite-difference estimate of update.
                 p0=self.__getattribute__(n)            
                 self.__setattr__(n,p0*(1+eta))
-                #print(n,p0,p0*(1+eta))
                 pred=self.STL_dayahead(y,ninit=ninit)
                 J2=self.rmse(y[ninit:],pred[ninit:])
                 dJ = np.abs((J2-J)/J)
@@ -201,14 +228,15 @@ class multiseasonal(object):
             Ni+=1       
             if (dJ_max<rtol):
                 print("Hit tolerance {} at iter {}".format(dJ,Ni))
-                plot_pred([pred,y],['Predicted','Actual'])               
+                self.plot_pred([pred,y],['Predicted','Actual'])               
                 return pred
             if(Ni%10==0):
-                print("Cost, Old Cost = {},{}".format(J,J2))
-                plot_pred([pred,y],['Predicted','Actual'])
+                print("Cost, Old Cost = {},{}".format(J,oldJ))
+                self.plot_pred([pred,y],['Predicted','Actual'])
                 for n in names:
                     p0=self.__getattribute__(n)
                     print(n,p0)
+                OldJ=J    
 
         print("Failed to hit tolerance after {} iter\n".format(iter))
         print("Cost:",J,J2)
@@ -219,5 +247,13 @@ class multiseasonal(object):
         z = np.sum( (x-y)*(x-y))/len(x)
         z = np.sqrt(z)
         return z
-        
+
+    def plot_pred(self,series_list,label_list):
+        """make plot to compare fitted parameters"""
+        for s,l in zip(series_list,label_list):
+            plt.plot(s,label=l)    
+        plt.legend()
+        plt.show()
+
+    
 #End of Class

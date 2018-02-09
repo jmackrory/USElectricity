@@ -1,4 +1,15 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 class multiseasonal_temp(object):
+    """multiseasonal_temp
+
+    Extends multiseasonal model to include temperature inputs.
+
+    Models temperature effects via: 
+    D~ A_n[T_n-T]_{+} + A_p[T-T_p]_{+}, where
+    []_{+} is only non-zero if its argument is non-zero.
+    """
     def __init__(self, l=0, b=0, s=np.zeros((2,24)), \
     alpha=0.1, beta=0.1, gamma=np.zeros((2,2)), \
     A0=2000, Ap=10, An=10,Tp=200, Tn=100):
@@ -28,6 +39,12 @@ class multiseasonal_temp(object):
         return gamma
 
     def Tmodel(self,T):
+        """Tmodel
+        Computes temperature component of demand.
+        Fits two rectified linear models (one for high temp),
+        one for low.
+        DT ~ Ap [T-Tp]_{+} + An[Tn-T]_{+}
+        """
         m1 = T>self.Tp
         m2 = T<self.Tn
         Tm = self.Ap*( T-self.Tp)*m1 \
@@ -202,3 +219,10 @@ class multiseasonal_temp(object):
         z = np.sum( (x-y)*(x-y))/len(x)
         z = np.sqrt(z)
         return z
+    
+    def plot_pred(self,series_list,label_list):
+        """make plot to compare fitted parameters"""
+        for s,l in zip(series_list,label_list):
+            plt.plot(s,label=l)    
+        plt.legend()
+        plt.show()
