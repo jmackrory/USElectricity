@@ -2,8 +2,45 @@
 # hourly electricity data from the EBA dataset, from the EIA.
 # Goes with EIA_explore.ipynb.
 
+#Also includes filtering functions to handle missing data, and average
+#down peaks: remove_na
+
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+
+def avg_extremes(df,window=2):
+    """avg_extremes(df)
+    Replace extreme outliers, or zero values with the average on either side.
+    Suitable for occasional anomalous readings.
+    """
+    mu=df.mean()
+    sd=df.std()
+    msk1=(df-mu)>4*sd
+    msk2 = df==0
+    msk=msk1|msk2
+    print( "Number of extreme values {}. Number of zero values {}".format(sum(msk1),sum(msk2)))
+    ind= np.arange(len(df))[msk]
+    for i in ind:
+        df.iloc[i]=(df.iloc[i-window]+df.iloc[i-window])/2
+
+    return df
+
+def remove_na(df,window=2):
+    """remove_na(df)
+    Replace all NA values with the mean value of the series.
+    """
+    na_msk=np.isnan(df.values)
+    #first pass:replace them all with the mean value - if a whole day is missing.
+    print( "Number of NA values {}".format(sum(na_msk)))
+    #replace with mean for that column.
+    df.loc[na_msk]=df.mean()
+
+    ind= np.arange(len(df))[na_msk]
+    #for isolated values, replace by the average on either side.    
+    for i in ind:
+        df.iloc[i]=(df.iloc[i-window]+df.iloc[i-window])/2
+    return df
 
 def remove_square_peak(Y,f,center,width):
     """remove_yearly
@@ -135,35 +172,9 @@ def invert_fft(Y):
     return y
 
 
-def avg_extremes(df,window=2):
-    """avg_extremes(df)
-    Replace extreme outliers, or zero values with the average on either side.
-    Suitable for occasional anomalous readings.
-    """
-    mu=df.mean()
-    sd=df.std()
-    msk1=(df-mu)>4*sd
-    msk2 = df==0
-    msk=msk1|msk2
-    print( "Number of extreme values {}. Number of zero values {}".format(sum(msk1),sum(msk2)))
-    ind= np.arange(len(df))[msk]
-    for i in ind:
-        df.iloc[i]=(df.iloc[i-window]+df.iloc[i-window])/2
-
-    return df
-
-def remove_na(df,window=2):
-    """remove_na(df)
-    Replace all NA values with the mean value of the series.
-    """
-    na_msk=np.isnan(df.values)
-    #first pass:replace them all with the mean value - if a whole day is missing.
-    print( "Number of NA values {}".format(sum(na_msk)))
-    #replace with mean for that column.
-    df.loc[na_msk]=df.mean()
-
-    ind= np.arange(len(df))[na_msk]
-    #for isolated values, replace by the average on either side.    
-    for i in ind:
-        df.iloc[i]=(df.iloc[i-window]+df.iloc[i-window])/2
-    return df
+def plot_pred(series_list,label_list):
+    """make plot to compare fitted parameters"""
+    for s,l in zip(series_list,label_list):
+        plt.plot(s,label=l)    
+    plt.legend()
+    plt.show()
