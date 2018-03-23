@@ -1,38 +1,26 @@
 ﻿--make new time_series table.
+--Takes around 50 sec for 1000 series, so 10 hrs.  No bueno.
 
---SELECT series_id FROM "ELEC" LIMIT 100
-/*
 DROP TABLE ELEC_TEMP;
 --makes table
-CREATE TABLE ELEC_TEMP 	( series_id TEXT, obs_date TEXT, obs_val TEXT);
+CREATE TABLE ELEC_TEMP	( series_id TEXT, regex_tmp TEXT[],
+obs_date DATE, obs_val NUMERIC);
 
-INSERT INTO ELEC_TEMP (series_id, obs_date, obs_val)*/
+EXPLAIN ANALYZE INSERT INTO ELEC_TEMP (series_id, regex_tmp)
 SELECT 	sub_data.series_id, 
-	regexp_matches(sub_data.data, '''([0-9Q]+)''','g'),
-	regexp_matches(sub_data.data,', ([0-9.]+)','g') 
-	FROM 
-	(SELECT series_id,data FROM "ELEC" LIMIT 10
-	)  sub_data;
+	regexp_matches(sub_data.data, '''([0-9Q]+)'', ([0-9.]+)','g')
+	FROM 	(SELECT series_id,data FROM "ELEC" 
+			WHERE name like 'Net generation%' 
+			   AND series_id not like '%.PLANT.%' 
+			   AND data IS NOT NULL 
+			   LIMIT 100	)  sub_data;
+--SELECT obs_date_tmp[1] FROM ELEC_TEMP LIMIT 100;
 
 --remove array {} symbols.
 /*UPDATE ELEC_TEMP SET obs_date = btrim(obs_date, '{}');
 UPDATE ELEC_TEMP SET obs_val=btrim(obs_val,'{}')*/
 
---ALTER TABLE ELEC_TEMP ADD year NUMERIC;
---ALTER TABLE ELEC_TEMP ADD month NUMERIC;
-
---UPDATE ELEC_TEMP SET year=to_number(left(obs_date,4),'9999');
---Convert date to month based on format.  
--- -- 
--- UPDATE ELEC_TEMP SET month=3*to_number(right(obs_date,1),'99') 
--- WHERE right(series_id,1)='Q';
--- 
--- UPDATE ELEC_TEMP SET month=to_number(right(obs_date,2),'99') 
--- WHERE right(series_id,1)='M';
--- 
--- UPDATE ELEC_TEMP SET month=12 
--- WHERE right(series_id,1)='A'; 
-
+CREATE TABLE month_lookup (end_str TEXT, month_str TEXT)
 
 /*Return the final quarter for string of final day on each quarter, given the quarter string*/
 CREATE OR REPLACE FUNCTION month_to_monthday(IN m_str TEXT) 
@@ -71,5 +59,9 @@ RETURNS DATE AS $$
 	) AS date_conv;
 $$ LANGUAGE SQL;
 
+UPDATE ELEC_TEMP SET obs_date=datestr_to_date(regex_tmp[1],right(series_id,1));
+UPDATE ELEC_TEMP SET obs_val=to_number(regex_tmp[2],'99999999999.9999999');
 
-SELECT obs_date, obs_val FROM ELEC_TEMP GROUP BY series_id 
+/*Made an index for faster searching */
+--CREATE INDEX ON "ELEC" (lower(name));
+SELECT * FROM ELEC_TEMP LIMIT 1000
