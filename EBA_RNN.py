@@ -123,7 +123,7 @@ class EBA_RNN(object):
         Returns:
             predictions: np.ndarray of shape (Nbatch, 1)
         """
-        feed = self.create_feed_dict(inputs_batch)
+o        feed = self.create_feed_dict(inputs_batch)
         predictions = sess.run(self.pred, feed_dict=feed)
         return predictions
 
@@ -213,7 +213,7 @@ class EBA_RNN(object):
             i0=0
             i1=self.Nbatch
             #restore variables
-            saver.restore(sess,model_path)
+            #saver.restore(sess,model_path)
             for i in range(nmax-1):
                 n0=n_steps*i
                 x_sub = Xin[n0:n0+n_steps,:]
