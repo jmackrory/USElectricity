@@ -28,6 +28,10 @@ class multiseasonal_temp(object):
         self.An = An
         self.Tp = Tp
         self.Tn = Tn
+        self.smooth_names=['alpha','beta','g00','g01','g10','g11']
+        self.temp_names=['An','Ap','Tn','Tp']
+        self.names=self.smooth_names+self.temp_names
+        self.save_opt_param()
 
     def gamma(self):
         """gamma(self)
@@ -47,8 +51,7 @@ class multiseasonal_temp(object):
         """
         m1 = T>self.Tp
         m2 = T<self.Tn
-        Tm = self.Ap*( T-self.Tp)*m1 \
-                  +self.An*(-T+self.Tn)*m2
+        Tm = self.Ap*( T-self.Tp)*m1 + self.An*(-T+self.Tn)*m2
         return Tm
 
     def fit_init_params(self,y,T,ninit=4*24*7):
@@ -88,31 +91,38 @@ class multiseasonal_temp(object):
         for n in range(n2):
              self.s[1,:] = self.s[1,:]+y_end[n*24:(n+1)*24]/n2
 
-    def predict_correct_dayahead(self,y,T):
+    def predict_dayahead(self,y,T):
         """predict_correct_dayahead
         Predict day-ahead demand given previous parameters.
-        Then update parameters given true demand.
         """
         t0=y.index
         m1 = t0.dayofweek>=5
         m1_n = t0.dayofweek<5        
         m2 = t0.hour
+        #find temp trend.
         Ttrend= self.Tmodel(T[t0])
         trend=self.l+self.b*np.arange(len(y))
         season=self.s[m1.astype(int),m2]
+        #make prediction based on current estimates
         ypred =Ttrend+ trend+season
+        return pd.Series(ypred,index=y.index)
 
+    def correct_dayahead(self,y,ypred):
+        """correct_dayahead(y,ypred)
+        Updates level, bias and seasonal patterns given 
+        """
+        t0=y.index
+        m1 = t0.dayofweek>=5
+        m1_n = t0.dayofweek<5        
         eps = y-ypred
         eps_l = np.mean(eps)
-        self.l = self.l + self.alpha*eps_l
+        self.l +=  self.alpha*eps_l
         eps=eps-eps_l
         eps_b = (eps[-1]-eps[0])/len(eps)
-        self.b = self.b + self.beta*eps_b
+        self.b +=  self.beta*eps_b
         eps=eps-eps_b*np.arange(len(eps))
         ds = np.dot(self.gamma(),np.array([m1_n,m1]))*[eps,eps]
         self.s = self.s + ds
-        ytot=pd.Series(ypred,index=y.index)
-        return ytot
 
     def STL_dayahead(self,y,T,ninit=4*24*7):
         """STL_dayahead
@@ -133,8 +143,8 @@ class multiseasonal_temp(object):
         ypred[:ninit] =Ttrend+trend+season
         for i in range(int(ninit/24),int(len(y)/24)):
             tslice = slice(i*24,(i+1)*24)
-            ypred[tslice] = self.predict_correct_dayahead(\
-                        y[tslice],T[tslice])
+            ypred[tslice] = self.predict_dayahead(y[tslice],T[tslice])
+            self.correct_dayahead(y[tslice],ypred[tslice])
             
         # if i%(24*7) ==0:
         #        print("l: {} b: {}\n".format(str(l),str(b)))
@@ -143,7 +153,7 @@ class multiseasonal_temp(object):
         return ypred
 
     def optimize_param(self,y,T,ninit=4*24*7,rtol=0.01,\
-                      eta=0.01,lr=0.2,nmax=100):
+                      eta=0.001,lr=0.05,nmax=1000):
         """optimize_param
         Use gradient descent to find optimum parameters for learning 
         rates alpha,beta,gamma.  Wait till all of their values are 
@@ -154,26 +164,32 @@ class multiseasonal_temp(object):
         self.fit_init_params(y,T)
         #Super clunky way of specifiying names.
         #Why did I think this was superior?
-        smooth_names=['alpha','beta','g00','g01','g10','g11']
-        temp_names=['An','Ap','Tn','Tp']
-        names=smooth_names+temp_names
         pred0 = self.STL_dayahead(y,T,ninit=ninit)
         J    = self.rmse(y[ninit:],pred0[ninit:])
         Ni=0
+        J_opt=J
         #loop over iterations
         for i in range(nmax):
             dJ_max=0
             lr = lr*0.99
             #for each name, tweak the model's variables.
-            for n in names:
+            oldJ=J            
+            for n in self.names:
+                #estimate finite-difference gradient.
                 p0=self.__getattribute__(n)           
                 self.__setattr__(n,p0*(1+eta))
                 pred=self.STL_dayahead(y,T,ninit=ninit)
                 J2=self.rmse(y[ninit:],pred[ninit:])
-                dJ = (J2-J)/J
+                dJ = (J2-J)/(eta*p0)
+                #dJ = (J2-J)/J                
                 #actually update 
-                p = p0-lr*dJ/(eta)
-                #restrict smoothing parameters to be within [0,1].
+                #p = p0-lr*dJ/(eta)
+                #use mod to truncate gradient.
+                if n in self.smooth_names:
+                    p = p0-lr*np.fmod(dJ,1)
+                else:
+                    p = p0-lr*dJ
+                    #restrict smoothing parameters to be within [0,1].
                 p=self.check_limits(n,p,p0)
                 self.__setattr__(n,p)
                 J=J2
@@ -181,21 +197,57 @@ class multiseasonal_temp(object):
             Ni+=1       
             if (dJ_max<rtol):
                 print("Hit tolerance {} at iter {}".format(dJ,Ni))
-                plot_pred([pred,y],['Predicted','Actual'])              
+                self.plot_pred([pred,y],['Predicted','Actual'])              
                 return pred
-            if(Ni%10==0):
-                print("Cost, Old Cost = {},{}".format(J,J2))
-                plot_pred([pred,y],['Predicted','Actual'])
+            if(Ni%5==0):
+                print("Cost, Old Cost = {},{}".format(J,oldJ))
+                self.plot_pred([pred,y],['Predicted','Actual'])
             print('Iter {}.  Cost {}'.format(Ni,J))
-            for n in names:
-                p0=self.__getattribute__(n)
-                print(n,p0)
+            #pv=[]
+            # for n in names:
+            #     pv.append(self.__getattribute__(n))
+            # pdict=dict(zip(names,pv))
+            # print(pdict)
+            #self.plot_pred([pred,y],['Predicted','Actual'])
 
-        print("Failed to hit tolerance after {} iter\n".format(iter))
+            if (J<J_opt):
+                self.save_opt_param()
+            elif (J>1.2*J_opt):
+                print('Resetting param to best')
+                self.restore_opt_param()
+                lr=0.8*lr
+                eta=0.8*lr
+                
+        print("Failed to hit tolerance after {} iter\n".format(nmax))
         print("Cost:",J,J2)
         return pred 
 
+    def save_opt_param(self):
+        """save_opt_param
+
+        Saves optimal parameters in variable
+        """
+        pv=[]
+        for n in self.names:
+            pv.append(self.__getattribute__(n))
+        pdict=dict(zip(self.names,pv))
+        self.opt_param=pdict
+
+    def restore_opt_param(self):
+        """restore_opt_param
+
+        Restore optimal parameters in variable
+        """
+        for n in self.names:
+            p=self.opt_param[n]
+            self.__setattr__(n,p)
+       
+    
     def check_limits(self,n,p,p0):
+        """check_limits
+        Ensures smoothing and temperature parameters
+        fall within reasonal ranges, e.g. [0,1] for smoothing.
+        """
         if (n in ['alpha','beta','g00','g01','g10','g11']):
             if (p>1):
                 print('param {} >1(!): {}'.format(n,p))
@@ -212,6 +264,7 @@ class multiseasonal_temp(object):
             p=200
         if (n in ['An','Ap'] and p<0):
             p=0.5*p0
+            
         return p 
 
     def rmse(self,x,y):
