@@ -5,6 +5,9 @@ Class for Multiseasonal demand model, ignoring temperature.
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+#to prevent creating huge logs.
+from IPython.display import clear_output
+
 #Class for Multiseasonal model.
 #Implements multi-seasonal smoothing with two seasons.
 class multiseasonal(object):
@@ -240,18 +243,20 @@ class multiseasonal(object):
             Ni+=1       
             if (dJ_max<rtol):
                 print("Hit tolerance {} at iter {}".format(dJ,Ni))
+                clear_output(wait=True)
                 self.plot_pred([pred,y],['Predicted','Actual'])               
                 return pred
             if(Ni%10==0):
+                clear_output(wait=True)
                 print("Cost, Old Cost = {},{}".format(J,oldJ))
-                oldJ=J.copy()                
+                oldJ=J.copy()
                 self.plot_pred([pred,y,pred-y],['Predicted','Actual','Error'])
                 for n in names:
                     p0=self.__getattribute__(n)
                     print(n,p0)
             
 
-        print("Failed to hit tolerance after {} iter\n".format(iter))
+        print("Failed to hit tolerance after {} iter\n".format(Ni))
         print("Cost:",J,J2)
         return pred 
 
