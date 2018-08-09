@@ -37,6 +37,8 @@ class multiseasonal(object):
         self._g01 = gamma[0,1]
         self._g10 = gamma[1,0]
         self._g11 = gamma[1,1]
+        self.names=['_alpha','_beta','_g00','_g01','_g10','_g11']
+        self.save_opt_param()
         
     def gamma(self):
         """gamma
@@ -98,58 +100,36 @@ class multiseasonal(object):
         self._b = self._b + self._beta*eps
         
         #update row, and hour
-        mr  = int(t.dayofweek>=5)
-        nmr = int(t.dayofweek<5)         
-        ds = np.dot(self.gamma(),np.array([nmr,mr]))*eps
+        #these masks return 0/1 indices for times during weekend/weekday
+        weekend_msk  = int(t.dayofweek>=5)
+        weekday_msk = int(t.dayofweek<5)
+        #now apply update for times within weekday/weekend.
+        ds = np.dot(self.gamma(),np.array([weekday_msk,weekend_msk]))*eps
         self._s[:,m1] = self._s[:,m1]+ds
 
-        #predict the next value given the updated parameters
-        ynew = self._l + self._s[mr,m1]
+        #predict the next value given the updated parameter
+        #use the weekday_msk to select which pattern to use, and hour for time
+        ynew = self._l + self._s[weekday_msk,m1]
         return ynew
-
-    # def STL_onestep(self,y,ninit=4*24*7):
-    #     """STL_onestep
-    #     Generates initial parameters, and then predicts remainder
-    #     of series for input data y.  
-    #     """
-    #     self.fit_init_params(y,ninit=ninit)
-    #     ypred = np.zeros(len(y))         
-    #     t0=y.index[0]
-    #     m1 = t0.dayofweek>=5
-    #     m2 = t0.hour
-        
-    #     ti = y[:ninit].index
-    #     msk=ti.dayofweek>=5
-    #     ypred[:ninit] = self._l+self._b*np.arange(ninit) \
-    #              + self._s[msk.astype(int),ti.hour.values]
-    #     for i in range(ninit,len(y)):
-    #         ynew=self.predict_correct_onestep(y[i],
-    #                 ypred[i-1],y.index[i])
-    #         ypred[i] = ynew
-    #     # if i%(24*7) ==0:
-    #     #         print("l: {} b: {}\n".format(str(l),str(b)))
-    #     #         print(s,"\n")
-    #     ypred=pd.Series(ypred,index=y.index)         
-    #     return ypred
 
     def predict_dayahead(self,t0):
         """predict_dayahead(t0)
         Predict day-ahead demand given previous parameters.
         """
-        m1 = t0.dayofweek>=5
-        m1_n = t0.dayofweek<5         
+        m1 = (t0.dayofweek>=5).astype(int)
         m2 = t0.hour
         trend=self._l+self._b*np.arange(len(t0))
         season=self._s[m1.astype(int),m2]
-        ypred = trend+season
         #parameter updates
-        ytot=pd.Series(ypred,index=t0)
+        ytot=pd.Series(trend+season,index=t0)
         return ytot
 
     def correct_dayahead(self,y,ypred):
         """correct_dayahead(y,ypred)
         Correct level, bias, seasonal parameters given difference
         between forecast and actual values.
+
+        Corrects on time-step at atime. 
         """
         #parameter updates
         #need to add in d_alpha, d_beta, d_gamma: basically a bunch of nesty cumulative sums.
@@ -166,7 +146,6 @@ class multiseasonal(object):
         self._b = self._b + self._beta*eps_b
         #remove linear trend, estimate seasonal
         eps=eps-eps_b*np.arange(len(eps))
-        
         
         ds = np.dot(self.gamma(),np.array([m1_n,m1]))*[eps,eps]
         self._s = self._s + ds
@@ -220,6 +199,7 @@ class multiseasonal(object):
         J    = self.rmse(y[ninit:],pred0[ninit:])
         Ni=0
         oldJ = J
+        J_opt=J
         #loop over iterations
         for i in range(nmax):
             dJ_max=0
@@ -232,10 +212,6 @@ class multiseasonal(object):
                 pred=self.predict_all_days(y,ninit=ninit)
                 J2=self.rmse(pred[ninit:],y[ninit:])
                 dJ = np.abs((J2-J)/J)
-                # if (debug):
-                #     print('J,J2,p',J,J2,p0)
-                #actually update 
-                #p = p0-lr*(J2-J)/(eta*p0)
                 #crop gradient to within +/- 1
                 p = p0+lr*np.fmod(dJ/(eta*p0),1)
                 if (p>1):
@@ -249,10 +225,13 @@ class multiseasonal(object):
                 self.__setattr__(n,p)
                 J=J2
                 dJ_max=max(dJ,dJ_max)
-            Ni+=1       
+            Ni+=1
+            if (J<J_opt):
+                J_opt=J
+                self.save_opt_param()
             if (dJ_max<rtol):
+                clear_output(wait=True)                
                 print("Hit tolerance {} at iter {}".format(dJ,Ni))
-                clear_output(wait=True)
                 self.plot_pred([pred,y],['Predicted','Actual'])               
                 return pred
             if(Ni%10==0):
@@ -269,12 +248,32 @@ class multiseasonal(object):
         print("Cost:",J,J2)
         return pred 
 
+
+    def save_opt_param(self):
+        """save_opt_param
+
+        Saves optimal parameters in variable
+        """
+        pv=[]
+        for n in self.names:
+            pv.append(self.__getattribute__(n))
+        pdict=dict(zip(self.names,pv))
+        self.opt_param=pdict
+
+    
     def rmse(self,x,y):
         """compute mean_square_error"""
         z = np.sum( (x-y)*(x-y))/len(x)
         z = np.sqrt(z)
         return z
 
+
+    def mape(self,x,y):
+        """compute mean_absolute_percentage_error"""
+        z = np.mean(np.abs(1-x/y))
+        return z
+
+    
     def plot_pred(self,series_list,label_list):
         """make plot to compare fitted parameters"""
         plt.figure()
