@@ -1,5 +1,9 @@
 """
 Class for Multiseasonal demand model, ignoring temperature.
+
+Currently using incorrect updating procedure.
+Will update to correct updating procedure, then offer
+and optimized version for computing optimal parameters. 
 """
 
 import numpy as np
@@ -33,9 +37,11 @@ class multiseasonal(object):
         self._g01 = gamma[0,1]
         self._g10 = gamma[1,0]
         self._g11 = gamma[1,1]
-       
         
     def gamma(self):
+        """gamma
+        Returns 2x2 gamma matrix based on stored parameters.
+        """
         gamma=np.array([[self._g00,self._g01],[self._g10,self._g11]])
         return gamma
 
@@ -43,8 +49,7 @@ class multiseasonal(object):
         """fit_init_params(y)
         Fits initial parameters for Hyndman's multi-seasonal model to
         hourly electricity data.
-        (My guess on how to do this, similar to naive STL method used in 
-        statstools.timeseries)
+        Hardcoded to treat Mon-Fri as the same, and Sat/Sun as the same.
         Finds level, bias and seasonal patterns based on first 4 weeks of data.  
         """
         ysub = y[0:ninit]
@@ -66,15 +71,20 @@ class multiseasonal(object):
         self._s = np.zeros((2,24))
         #get avg week_day pattern
         n1 = int(len(y_week)/24)
+        
         for n in range(n1):
-             self._s[0,:] = self._s[0,:]+y_week[n*24:(n+1)*24]/n1
+            yt=y_week[n*24:(n+1)*24]
+            hr=yt.index.hour
+            self._s[0,hr] = self._s[0,hr]+yt.values/n1
         #get avg week_end pattern
         n2 = int(len(y_end)/24)             
         for n in range(n2):
-             self._s[1,:] = self._s[1,:]+y_end[n*24:(n+1)*24]/n2
+            yt=y_end[n*24:(n+1)*24]
+            hr=yt.index.hour
+            self._s[1,hr] = self._s[1,hr]+yt.values/n2
 
-    def predict_correct_onestep(self,yhat,ypred,t):
-        """predict_correct_onestep
+    def correct_onestep(self,yhat,ypred,t):
+        """correct_onestep
         Updates time parameters based on differences between predicted 
         and measured.  Also predicts next step based on current values. 
         (Not fixing the model parameters for update strength!)
@@ -83,13 +93,13 @@ class multiseasonal(object):
         eps=(ypred-yhat)
         #find seasonal patterns.  
         m1 = t.hour                     
-        mr  = int(t.dayofweek>=5)
-        nmr = int(t.dayofweek<5)         
         #Original version with bias in there too?
         self._l = self._l + self._b + self._alpha*eps
         self._b = self._b + self._beta*eps
         
         #update row, and hour
+        mr  = int(t.dayofweek>=5)
+        nmr = int(t.dayofweek<5)         
         ds = np.dot(self.gamma(),np.array([nmr,mr]))*eps
         self._s[:,m1] = self._s[:,m1]+ds
 
@@ -97,30 +107,30 @@ class multiseasonal(object):
         ynew = self._l + self._s[mr,m1]
         return ynew
 
-    def STL_onestep(self,y,ninit=4*24*7):
-        """STL_onestep
-        Generates initial parameters, and then predicts remainder
-        of series for input data y.  
-        """
-        self.fit_init_params(y,ninit=ninit)
-        ypred = np.zeros(len(y))         
-        t0=y.index[0]
-        m1 = t0.dayofweek>=5
-        m2 = t0.hour
+    # def STL_onestep(self,y,ninit=4*24*7):
+    #     """STL_onestep
+    #     Generates initial parameters, and then predicts remainder
+    #     of series for input data y.  
+    #     """
+    #     self.fit_init_params(y,ninit=ninit)
+    #     ypred = np.zeros(len(y))         
+    #     t0=y.index[0]
+    #     m1 = t0.dayofweek>=5
+    #     m2 = t0.hour
         
-        ti = y[:ninit].index
-        msk=ti.dayofweek>=5
-        ypred[:ninit] = self._l+self._b*np.arange(ninit) \
-                 + self._s[msk.astype(int),ti.hour.values]
-        for i in range(ninit,len(y)):
-            ynew=self.predict_correct_onestep(y[i],
-                    ypred[i-1],y.index[i])
-            ypred[i] = ynew
-        # if i%(24*7) ==0:
-        #         print("l: {} b: {}\n".format(str(l),str(b)))
-        #         print(s,"\n")
-        ypred=pd.Series(ypred,index=y.index)         
-        return ypred
+    #     ti = y[:ninit].index
+    #     msk=ti.dayofweek>=5
+    #     ypred[:ninit] = self._l+self._b*np.arange(ninit) \
+    #              + self._s[msk.astype(int),ti.hour.values]
+    #     for i in range(ninit,len(y)):
+    #         ynew=self.predict_correct_onestep(y[i],
+    #                 ypred[i-1],y.index[i])
+    #         ypred[i] = ynew
+    #     # if i%(24*7) ==0:
+    #     #         print("l: {} b: {}\n".format(str(l),str(b)))
+    #     #         print(s,"\n")
+    #     ypred=pd.Series(ypred,index=y.index)         
+    #     return ypred
 
     def predict_dayahead(self,t0):
         """predict_dayahead(t0)
@@ -156,12 +166,14 @@ class multiseasonal(object):
         self._b = self._b + self._beta*eps_b
         #remove linear trend, estimate seasonal
         eps=eps-eps_b*np.arange(len(eps))
+        
+        
         ds = np.dot(self.gamma(),np.array([m1_n,m1]))*[eps,eps]
         self._s = self._s + ds
         return None
         
-    def STL_dayahead(self,y,ninit=4*24*7):
-        """STL_dayahead
+    def predict_all_days(self,y,ninit=4*24*7):
+        """predict_all_days
         Predict day-ahead demand given previous parameters.
         Then update parameters given true demand.
         """
@@ -181,9 +193,6 @@ class multiseasonal(object):
             ypred_slice = self.predict_dayahead(y_slice.index)
             self.correct_dayahead(ypred_slice,y_slice)
             ypred[tslice]=ypred_slice
-        # if i%(24*7) ==0:
-        #         print("l: {} b: {}\n".format(str(l),str(b)))
-        #         print(s,"\n")
         ypred=pd.Series(ypred,index=y.index)         
         return ypred
 
@@ -207,7 +216,7 @@ class multiseasonal(object):
         #Super clunky way of specifiying names.
         #Why did I think this was superior?
         names=['_alpha','_beta','_g00','_g01','_g10','_g11']
-        pred0 = self.STL_dayahead(y,ninit=ninit)
+        pred0 = self.predict_all_days(y,ninit=ninit)
         J    = self.rmse(y[ninit:],pred0[ninit:])
         Ni=0
         oldJ = J
@@ -220,7 +229,7 @@ class multiseasonal(object):
                 #do finite-difference estimate of update.
                 p0=self.__getattribute__(n)            
                 self.__setattr__(n,p0*(1+eta))
-                pred=self.STL_dayahead(y,ninit=ninit)
+                pred=self.predict_all_days(y,ninit=ninit)
                 J2=self.rmse(pred[ninit:],y[ninit:])
                 dJ = np.abs((J2-J)/J)
                 # if (debug):
