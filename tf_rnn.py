@@ -1,15 +1,10 @@
 """
 Recurent Neural Network
 
-Creates python object which stores tensorflow graph.
+Creates python class for creating, training, saving, infering a
+Tensorflow graph to forecast time-series. 
 Makes a simple multilayer RNN, with mapping from inputs 
 to hidden layers.  
-
-This takes in inputs from Nstep_in.
-This is mapped down to a different number of dimensions via a linear tranformation layer.
-There is then a multi-layer RNN with dropout for regularization.
-Then the model has a final linear layer (analogous to attention?)
-to output a sequence of length Nstep_out, with Noutput variables at each step. 
 
 Based on object oriented framework used in CS 224,
 and A. Geron's "Hands on Machine Learning with Scikit-Learn and
@@ -19,18 +14,22 @@ The tensorflow docs are pretty rough, but the tutorials are almost readable.
 The input (X), and target (y) placeholders are defined in add_placeholders.
 These are inputs to the TF graph.
 
+This takes in inputs from Nstep_in.
+This is mapped down to a different number of dimensions via a linear tranformation layer.
+There is then a multi-layer RNN with dropout for regularization.
+Then the model has a final linear layer (analogous to attention?)
+to output a sequence of length Nstep_out, with Noutput variables at each step. 
+
 Before the network can be run it should be built, which defines the 
 The guts of the network are defined in add_prediction_op, which
 has an input/output hidden layer to reduce dimension.  
 There is then a multilayer, dynamic RNN inside.
 This is all defined with tensorflow intrinsics/added modules.
 Currently, I've turned off the dropout, which should only be active
-during training.  
+during training.  (Can toggle this by tweeking keep_prob).
 
 The training is done with batch gradient descent optimization
-via the Adam optimizer which is an improved Gradient descent.
-It scales gradients, includes a momentum variable).
-Note that tensorflow handles backpropagation automatically. 
+via the Adam optimizer.
 
 The loss/cost function is defined in add_loss_op, and is just 
 the mean-square error across inputs.
@@ -55,21 +54,18 @@ import matplotlib.pyplot as plt
 from IPython.display import clear_output
 import time
 
-class recurrent_NN(object):
+class RNNConfig(object):
     """
-    Make a multi-layer recurrent neural network for predicting next days
-    stock data.
-    """
-    def __init__(self,Nsteps,Ninputs,Nhidden,Noutputs,cell):
-        """
-        Initialize model and build initial graph.
+    RNNConfig
 
-        Nsteps - number of time steps
-        Ninputs - number of input features
-        Nhidden - number of hidden degrees of freedom
-        Noutputs - number of outputs at final time-step
-        cell - type of recurrent cell to use (basic, LSTM, GRU)
-        """
+    Storage class for Recurrent network parameters.
+
+    """
+    def __init__(Nsteps_in=24, Nsteps_out=24,
+                 Ninputs=1, Noutputs=1,
+                 cell='RNN',Nlayers=2,Nhidden=100,
+                 lr=0.001,Nepoch=1000,keep_prob=0.5):
+    
         #number of outputs per input
         self.Noutputs=Noutputs
         self.Ninputs=Ninputs        
@@ -78,16 +74,26 @@ class recurrent_NN(object):
         self.Nsteps_out=Nsteps_out
         #number of dim on input
         self.cell_type=cell
-        self.Nlayers=2
+        self.Nlayers=Nlayers
         self.Nhidden=Nhidden
-        self.lr = 0.001
+        self.lr = lr
         self.keep_prob=0.5
-        self.n_iter=200
+        self.Nepoch=Nepoch
         self.nprint=20
-        self.is_training=True
-        self.is_dropout=True
         #only grabbing a fraction of the data
         self.Nbatch=100
+
+class NNModel(object):
+    """
+    Abstract Base Class for Tensorflow Neural Network Model.
+    Designed with time-series in mind.  
+    """
+    def __init__(self,config):
+        """
+        Initialize model and build initial graph.
+        config - instance of NNModel with parameters.
+        """
+        self.config=config
         #makes the tensor flow graph.
         self.build()
 
@@ -108,9 +114,11 @@ class recurrent_NN(object):
         """
         #load in the training examples, and their labels
         #inputs:  Nobs, with n_steps, and n_inputs per step
-        self.X = tf.placeholder(tf.float32,[None,self.Nsteps_in,self.Ninputs],name='X')
+        self.X = tf.placeholder(tf.float32,[None,self.config.Nsteps_in,self.config.Ninputs],name='X')
         #Outputs: n_outputs we want to predict in the future.
-        self.y = tf.placeholder(tf.float32,[None,self.Nsteps_out,self.Noutputs],name='y')
+        self.y = tf.placeholder(tf.float32,[None,self.config.Nsteps_out,self.config.Noutputs],name='y')
+
+        raise NotImplementedError
 
     #should really fix to use dataset, with batch generator.    
     def create_feed_dict(self,inputs_batch, labels_batch=None):
@@ -127,55 +135,17 @@ class recurrent_NN(object):
             feed_dict[self.y]=labels_batch
         return feed_dict
 
-    def make_RNN_cell(self,Nneurons,fn=tf.nn.relu):
-        """
-        Returns a new cell (for deep recurrent networks), with Nneurons,
-        and activation function fn.
-        """
-        #Make cell type
-        if self.cell_type=='basic':
-            cell=BasicRNNCell(num_units=Nneurons,activation=fn)
-        elif self.cell_type=='LSTM':
-            cell=LSTMCell(num_units=Nneurons,activation=fn)
-        elif self.cell_type=='GRU':
-            cell=GRUCell(num_units=Nneurons,activation=fn)
-        #only include dropout when training
-        cell=DropoutWrapper(cell,input_keep_prob=self.keep_prob,
-                            variational_recurrent=True,
-                            input_size=Nneurons,
-                            dtype=tf.float32)
-        return cell
+        raise NotImplementedError
     
     def add_prediction_op(self):
         """The core model to the graph, that
         transforms the inputs into outputs.
         Implements deep neural network with relu activation.
-        """
-        #Input matrix to change input dimensions to same size as hidden.
-        A=tf.Variable(tf.random_uniform((self.Ninput,self.Nhidden)),name="A"))
-        inputs_reduced=tf.matmul(self.X,A)
-        #Make multiple cells. Note that using [cell]*n_layers did not work.  This just made a copy pointing at the SAME cell in memory.
-        #That led to problems with training. 
-        #But calling a function that returns a cell avoids that.
-        cell_list=[]
-        for i in range(self.Nlayers):
-            cell_list.append(self.make_RNN_cell(self.Nhidden,tf.nn.leaky_relu))
-        multi_cell=tf.contrib.rnn.MultiRNNCell(cell_list,state_is_tuple=True)
-        rnn_outputs,states=tf.nn.dynamic_rnn(multi_cell,inputs_reduced,dtype=tf.float32)
-
-        #this maps the number of hidden units to fewer outputs.
-        Nt2=self.Nhidden*self.Ntime_in
-        Nt1=self.Noutput*self.Ntime_out
-        stacked_rnn_outputs = tf.reshape(rnn_outputs,[-1,Nt2])
-        A_out=tf.Variable(tf.random_uniform((Nt2,Nt1)),name="A_out"))
-        remapped_outputs=tf.matmul(stacked_rnn_outputs,A_out)
-        outputs=tf.reshape(remapped_outputs,[-1,self.Ntime_out,self.Noutputs])]
         
-        # #use states (like CNN) since need final output state.
-        # #this maps the number of hidden units back to a different number.
-        # print(states)
-        # outputs = fully_connected(states,self.Noutputs,activation_fn=None)
-        print(outputs)
+        Returns: outputs - tensor
+
+        """
+        raise NotImplementedError
         return outputs
 
     def add_loss_op(self,outputs):
@@ -188,7 +158,10 @@ class recurrent_NN(object):
     def add_training_op(self,loss):
         """Create op for optimizing loss function.
         Can be passed to sess.run() to train the model.
-        Return 
+        Args:
+           loss - TF scalar variable for loss over batch(e.g. RMSE)
+        Return: 
+          training_op - operation to train and update graph
         """
         optimizer=tf.train.AdamOptimizer(learning_rate=self.lr)
         training_op=optimizer.minimize(loss)
@@ -222,7 +195,6 @@ class recurrent_NN(object):
 
         return predictions
 
-
     # #Should use tf.Data as described in seq2seq.
     #Much faster than feed_dict according to TF docs
     
@@ -243,9 +215,9 @@ class recurrent_NN(object):
         Nt,Nin = X.shape
         x_list=[]
         y_list=[]
-        for i in range(self.Nbatch):
-            n0=int(np.random.random()*(Nt-self.Nsteps-1))
-            n1 = n0+self.Nsteps
+        for i in range(self.config.Nbatch):
+            n0=int(np.random.random()*(Nt-self.config.Nsteps-1))
+            n1 = n0+self.config.Nsteps
             x_sub = X[n0:n1]
             y_sub = y[n1]
             x_list.append(x_sub)
@@ -257,12 +229,18 @@ class recurrent_NN(object):
     def train_graph(self,Xi,yi,save_name=None):
         """train_graph
         Actually trains the graph, and saves it. 
+
+        Args: Xi - input data
+              yi - target output data 
+              save_name - path to use to save Models under.
+        Side effect: Prints output loss, and makes some plots of error, and logs.
+                     
         """
         self.is_training=True
         #save model and graph
         saver=tf.train.Saver()
         init=tf.global_variables_initializer()
-        loss_tot=np.zeros(int(self.n_iter/self.nprint+1))
+        loss_tot=np.zeros(int(self.config.Nepoch/self.nprint+1))
         #Try adding everything by name to a collection
         tf.add_to_collection('X',self.X)
         tf.add_to_collection('y',self.y)
@@ -277,12 +255,12 @@ class recurrent_NN(object):
             t0=time.time()
             #Use Writer for tensorboard.
             writer=tf.summary.FileWriter("logdir-train",sess.graph)            
-            for iteration in range(self.n_iter+1):
+            for iteration in range(self.config.Nepoch+1):
                 #select random starting point.
                 X_batch,y_batch=self.get_random_batch(Xi,yi)
                 current_loss=self.train_on_batch(sess, X_batch, y_batch)
                 t2_b=time.time()
-                if (iteration)%self.nprint ==0:
+                if (iteration)%self.config.nprint ==0:
                     clear_output(wait=True)
                     print('iter #{}. Current MSE:{}'.format(iteration,current_loss))
                     print('Total Time taken:{}'.format(t2_b-t0))
@@ -327,31 +305,31 @@ class recurrent_NN(object):
             #restores weights etc.
             saver.restore(sess,full_model_name)
             Nin=input_data.shape[0]
-            if (Nin < self.Nbatch):
+            if (Nin < self.config.Nbatch):
                 print('Number of inputs < Number of batch expected')
                 print('Padding with zeros')
                 input_dat=np.append(input_dat,
-                                    np.zeros((self.Nbatch-Nin,self.Noutputs)))
+                                    np.zeros((self.config.Nbatch-Nin,self.config.Noutputs)))
             i0=0
-            i1=self.Nbatch
-            nn_pred_total=np.zeros((Nin,self.Noutputs))
-            while (i1 < Nin-self.Nsteps):
+            i1=self.config.Nbatch
+            nn_pred_total=np.zeros((Nin,self.config.Noutputs))
+            while (i1 < Nin-self.config.Nsteps):
                 print(i0,i1)
                 #now treat each time, as another element in a batch.
                 #(i.e. march through dataset predicting, instead of randomly selecting for training)
-                X_batch=np.zeros((self.Nbatch,self.Nsteps,self.Ninputs))
-                for i in range(self.Nbatch):
-                    X_batch[i,:,:]=input_data[(i0+i):(i0+i+self.Nsteps),:]
+                X_batch=np.zeros((self.config.Nbatch,self.config.Nsteps,self.config.Ninputs))
+                for i in range(self.config.Nbatch):
+                    X_batch[i,:,:]=input_data[(i0+i):(i0+i+self.config.Nsteps),:]
                 nn_pred=self.predict_on_batch(sess,X_batch)
-                sl=slice(self.Nsteps+i0,self.Nsteps+i1)
+                sl=slice(self.config.Nsteps+i0,self.config.Nsteps+i1)
                 nn_pred_total[sl]=nn_pred
                 i0=i1
-                i1+=self.Nbatch
+                i1+=self.config.Nbatch
             #last iter: do remaining operations.  
-            Nleft=Nin-i0-self.Nsteps
-            X_batch=np.zeros((Nleft,self.Nsteps,self.Ninputs))
+            Nleft=Nin-i0-self.config.Nsteps
+            X_batch=np.zeros((Nleft,self.config.Nsteps,self.config.Ninputs))
             for i in range(Nleft):
-                X_batch[i,:,:]=input_data[(i0+i):(i0+i+self.Nsteps),:]
+                X_batch[i,:,:]=input_data[(i0+i):(i0+i+self.config.Nsteps),:]
             nn_pred=self.predict_on_batch(sess,X_batch)
             nn_pred_total[-Nleft:]=nn_pred
             #nn_pred_reduced=np.round(nn_pred_total).astype(bool)
@@ -371,4 +349,61 @@ class recurrent_NN(object):
         self.loss=tf.get_collection('loss')[0]
         #restores weights etc.
         saver.restore(sess,model_name+'-'+str(num))
+    
+class recurrent_NN(NNModel):
+    """
+    Make a multi-layer recurrent neural network for predicting next days
+    stock data.
+    """
+
+    def make_RNN_cell(self,fn=tf.nn.relu):
+        """
+        Returns a new cell (for deep recurrent networks), with Nneurons,
+        and activation function fn.
+
+        Args: fn - tensorflow activation function, e.g. tf.nn.relu, tf.nn.tanh
+        Return cell - TF RNN cell
+        """
+        #Make cell type
+        if self.cell_type=='basic':
+            cell=BasicRNNCell(num_units=self.config.Nhidden,activation=fn)
+        elif self.cell_type=='LSTM':
+            cell=LSTMCell(num_units=self.config.Nhidden,activation=fn)
+        elif self.cell_type=='GRU':
+            cell=GRUCell(num_units=self.config.Nhidden,activation=fn)
+        #only include dropout when training
+        cell=DropoutWrapper(cell,input_keep_prob=self.config.keep_prob,
+                            variational_recurrent=True,
+                            input_size=self.config.Nhidden,
+                            dtype=tf.float32)
+        return cell
+    
+    def add_prediction_op(self):
+        """The core model to the graph, that
+        transforms the inputs into outputs.
+        Implements deep neural network with relu activation.
+        """
+        #Input matrix to change input dimensions to same size as hidden.
+        A=tf.Variable(tf.random_uniform((self.config.Ninput,self.config.Nhidden)),name="A")
+        inputs_reduced=tf.matmul(self.X,A)
+        #Make multiple cells. 
+        #But calling a function that returns a cell avoids that.
+        cell_list=[]
+        for i in range(self.config.Nlayers):
+            cell_list.append(self.make_RNN_cell(tf.nn.leaky_relu))
+        multi_cell=tf.contrib.rnn.MultiRNNCell(cell_list,state_is_tuple=True)
+        rnn_outputs,states=tf.nn.dynamic_rnn(multi_cell,inputs_reduced,dtype=tf.float32)
+
+        #this maps the number of hidden units to fewer outputs.
+        Nt2=self.config.Nhidden * self.config.Ntime_in
+        Nt1=self.config.Noutput * self.config.Ntime_out
+        stacked_rnn_outputs = tf.reshape(rnn_outputs,[-1,Nt2])
+        A_out=tf.Variable(tf.random_uniform((Nt2,Nt1)),name="A_out")
+        remapped_outputs=tf.matmul(stacked_rnn_outputs,A_out)
+        outputs=tf.reshape(remapped_outputs,[-1,self.config.Ntime_out,self.config.Noutputs])
+        
+        return outputs
+
+    
+
         
