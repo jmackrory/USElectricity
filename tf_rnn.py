@@ -61,11 +61,10 @@ class RNNConfig(object):
     Storage class for Recurrent network parameters.
 
     """
-    def __init__(Nsteps_in=24, Nsteps_out=24,
+    def __init__(self,Nsteps_in=24, Nsteps_out=24,
                  Ninputs=1, Noutputs=1,
                  cell='RNN',Nlayers=2,Nhidden=100,
                  lr=0.001,Nepoch=1000,keep_prob=0.5):
-    
         #number of outputs per input
         self.Noutputs=Noutputs
         self.Ninputs=Ninputs        
@@ -79,9 +78,12 @@ class RNNConfig(object):
         self.lr = lr
         self.keep_prob=0.5
         self.Nepoch=Nepoch
-        self.nprint=20
+        self.Nprint=20
         #only grabbing a fraction of the data
         self.Nbatch=100
+
+    def __print__(self):
+        return self.__dict__
 
 class NNModel(object):
     """
@@ -118,7 +120,6 @@ class NNModel(object):
         #Outputs: n_outputs we want to predict in the future.
         self.y = tf.placeholder(tf.float32,[None,self.config.Nsteps_out,self.config.Noutputs],name='y')
 
-        raise NotImplementedError
 
     #should really fix to use dataset, with batch generator.    
     def create_feed_dict(self,inputs_batch, labels_batch=None):
@@ -135,7 +136,6 @@ class NNModel(object):
             feed_dict[self.y]=labels_batch
         return feed_dict
 
-        raise NotImplementedError
     
     def add_prediction_op(self):
         """The core model to the graph, that
@@ -163,7 +163,7 @@ class NNModel(object):
         Return: 
           training_op - operation to train and update graph
         """
-        optimizer=tf.train.AdamOptimizer(learning_rate=self.lr)
+        optimizer=tf.train.AdamOptimizer(learning_rate=self.config.lr)
         training_op=optimizer.minimize(loss)
         return training_op
 
@@ -178,7 +178,9 @@ class NNModel(object):
             loss: loss over the batch (a scalar)
         """
         feed = self.create_feed_dict(inputs_batch, labels_batch=labels_batch)
-        _, loss = sess.run([self.train_op, self.loss], feed_dict=feed)
+        #_, loss = sess.run([self.train_op, self.loss], feed_dict=feed)
+        sess.run(self.train_op, feed_dict=feed)
+        loss=sess.run(self.loss, feed_dict=feed)                
         return loss
 
     def predict_on_batch(self, sess, inputs_batch):
@@ -192,7 +194,6 @@ class NNModel(object):
         """
         feed = self.create_feed_dict(inputs_batch)
         predictions = sess.run(self.pred, feed_dict=feed)
-
         return predictions
 
     # #Should use tf.Data as described in seq2seq.
@@ -216,10 +217,14 @@ class NNModel(object):
         x_list=[]
         y_list=[]
         for i in range(self.config.Nbatch):
-            n0=int(np.random.random()*(Nt-self.config.Nsteps-1))
-            n1 = n0+self.config.Nsteps
+            #find starting time for inputs
+            n0 =int(np.random.random()*(Nt-self.config.Nsteps_in-self.config.Nsteps_out))
+            #edge of input data / start-point of target
+            n1 = n0+self.config.Nsteps_in
+            #end-point of target
+            n2 = n1+self.config.Nsteps_out
             x_sub = X[n0:n1]
-            y_sub = y[n1]
+            y_sub = y[n1:n2]
             x_list.append(x_sub)
             y_list.append(y_sub)
         x_batch=np.stack(x_list,axis=0)
@@ -228,7 +233,7 @@ class NNModel(object):
     
     def train_graph(self,Xi,yi,save_name=None):
         """train_graph
-        Actually trains the graph, and saves it. 
+        Actually trains the graph, and saves it. o
 
         Args: Xi - input data
               yi - target output data 
@@ -240,7 +245,7 @@ class NNModel(object):
         #save model and graph
         saver=tf.train.Saver()
         init=tf.global_variables_initializer()
-        loss_tot=np.zeros(int(self.config.Nepoch/self.nprint+1))
+        loss_tot=np.zeros(int(self.config.Nepoch/self.config.Nprint+1))
         #Try adding everything by name to a collection
         tf.add_to_collection('X',self.X)
         tf.add_to_collection('y',self.y)
@@ -260,7 +265,7 @@ class NNModel(object):
                 X_batch,y_batch=self.get_random_batch(Xi,yi)
                 current_loss=self.train_on_batch(sess, X_batch, y_batch)
                 t2_b=time.time()
-                if (iteration)%self.config.nprint ==0:
+                if (iteration)%self.config.Nprint ==0:
                     clear_output(wait=True)
                     print('iter #{}. Current MSE:{}'.format(iteration,current_loss))
                     print('Total Time taken:{}'.format(t2_b-t0))
@@ -270,13 +275,13 @@ class NNModel(object):
                         saver.save(sess,save_name,global_step=iteration,
                                    write_meta_graph=True)
                     #manual logging of loss    
-                    loss_tot[int(iteration/self.nprint)]=current_loss
+                    loss_tot[int(iteration/self.config.Nprint)]=current_loss
             writer.close()
             #Manual plotting of loss.  Writer/Tensorboard supercedes this .
             plt.figure()                            
             plt.plot(loss_tot)
             plt.ylabel('Error')
-            plt.xlabel('Iterations x{}'.format(self.nprint))
+            plt.xlabel('Iterations x{}'.format(self.config.Nprint))
             plt.show()
 
     def predict_all(self,model_name,num,input_data,reset=False):
@@ -365,12 +370,15 @@ class recurrent_NN(NNModel):
         Return cell - TF RNN cell
         """
         #Make cell type
-        if self.cell_type=='basic':
+        if self.config.cell_type=='RNN':
             cell=BasicRNNCell(num_units=self.config.Nhidden,activation=fn)
-        elif self.cell_type=='LSTM':
+        elif self.config.cell_type=='LSTM':
             cell=LSTMCell(num_units=self.config.Nhidden,activation=fn)
-        elif self.cell_type=='GRU':
+        elif self.config.cell_type=='GRU':
             cell=GRUCell(num_units=self.config.Nhidden,activation=fn)
+        else:
+            msg="cell_type must be RNN, LSTM or GRU. cell_type was {}".format(self.config.cell_type)
+            raise Exception(msg)
         #only include dropout when training
         cell=DropoutWrapper(cell,input_keep_prob=self.config.keep_prob,
                             variational_recurrent=True,
@@ -384,10 +392,9 @@ class recurrent_NN(NNModel):
         Implements deep neural network with relu activation.
         """
         #Input matrix to change input dimensions to same size as hidden.
-        A=tf.Variable(tf.random_uniform((self.config.Ninput,self.config.Nhidden)),name="A")
-        inputs_reduced=tf.matmul(self.X,A)
-        #Make multiple cells. 
-        #But calling a function that returns a cell avoids that.
+        A=tf.Variable(tf.random_uniform((self.config.Ninputs,self.config.Nhidden)),name="A")
+        inputs_reduced=tf.tensordot(self.X,A,axes=[[2],[0]],name='inputs_reduced')
+        #Make a cell for each layer 
         cell_list=[]
         for i in range(self.config.Nlayers):
             cell_list.append(self.make_RNN_cell(tf.nn.leaky_relu))
@@ -395,12 +402,12 @@ class recurrent_NN(NNModel):
         rnn_outputs,states=tf.nn.dynamic_rnn(multi_cell,inputs_reduced,dtype=tf.float32)
 
         #this maps the number of hidden units to fewer outputs.
-        Nt2=self.config.Nhidden * self.config.Ntime_in
-        Nt1=self.config.Noutput * self.config.Ntime_out
+        Nt2=self.config.Nhidden * self.config.Nsteps_in
+        Nt1=self.config.Noutputs * self.config.Nsteps_out
         stacked_rnn_outputs = tf.reshape(rnn_outputs,[-1,Nt2])
         A_out=tf.Variable(tf.random_uniform((Nt2,Nt1)),name="A_out")
         remapped_outputs=tf.matmul(stacked_rnn_outputs,A_out)
-        outputs=tf.reshape(remapped_outputs,[-1,self.config.Ntime_out,self.config.Noutputs])
+        outputs=tf.reshape(remapped_outputs,[-1,self.config.Nsteps_out,self.config.Noutputs])
         
         return outputs
 
