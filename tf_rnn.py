@@ -284,31 +284,33 @@ class NNModel(object):
             plt.xlabel('Iterations x{}'.format(self.config.Nprint))
             plt.show()
 
-    def predict_all(self,model_name,num,input_data,reset=False):
-        """network_predict
+    def predict_all(self,input_data,model_name,num=None,reset=False):
+        """predict_all
         Load a saved Neural network, and predict the output labels
         based on input_data.  Predicts the whole sequence, using
         the batching to process the data in sequence. 
     
-        Input: model_name - string name to where model/variables are saved.
-        input_data - transformed data of shape (Nobs,Nfeature).
+        Input: input_data - transformed data of shape (Nobs,Nfeature).
+        model_name - name to where model/variables are saved.
+        num - number of iteration to use.  (defaults to number of epochs)
+        reset - optional flag to force a reset of default TF graph.
 
-        Output nn_pred_reduced - vector of predicted labels.
+        Output: nn_pred_reduced - vector of predicted labels.
         """
         if (reset):
             tf.reset_default_graph()        
         self.is_training=False
-        full_model_name=model_name+'-'+str(num)
         with tf.Session() as sess:
-            saver=tf.train.import_meta_graph(full_model_name+'.meta')
-            #restore graph structure
-            self.X=tf.get_collection('X')[0]
-            self.y=tf.get_collection('y')[0]
-            self.pred=tf.get_collection('pred')[0]
-            self.train_op=tf.get_collection('train_op')[0]
-            self.loss=tf.get_collection('loss')[0]
-            #restores weights etc.
-            saver.restore(sess,full_model_name)
+            # saver=tf.train.import_meta_graph(full_model_name+'.meta')
+            # #restore graph structure
+            # self.X=tf.get_collection('X')[0]
+            # self.y=tf.get_collection('y')[0]
+            # self.pred=tf.get_collection('pred')[0]
+            # self.train_op=tf.get_collection('train_op')[0]
+            # self.loss=tf.get_collection('loss')[0]
+            # #restores weights etc.
+            # saver.restore(sess,full_model_name)
+            self.restore_model(sess,model_name,num)
             Nin=input_data.shape[0]
             if (Nin < self.config.Nbatch):
                 print('Number of inputs < Number of batch expected')
@@ -318,15 +320,15 @@ class NNModel(object):
             i0=0
             i1=self.config.Nbatch
             nn_pred_total=np.zeros((Nin,self.config.Noutputs))
-            while (i1 < Nin-self.config.Nsteps):
+            while (i1 < Nin-self.config.Nsteps_in-self.config.Nsteps_out):
                 print(i0,i1)
                 #now treat each time, as another element in a batch.
                 #(i.e. march through dataset predicting, instead of randomly selecting for training)
-                X_batch=np.zeros((self.config.Nbatch,self.config.Nsteps,self.config.Ninputs))
+                X_batch=np.zeros((self.config.Nbatch,self.config.Nsteps_in,self.config.Ninputs))
                 for i in range(self.config.Nbatch):
-                    X_batch[i,:,:]=input_data[(i0+i):(i0+i+self.config.Nsteps),:]
+                    X_batch[i,:,:]=input_data[(i0+i):(i0+i+self.config.Nsteps_in),:]
                 nn_pred=self.predict_on_batch(sess,X_batch)
-                sl=slice(self.config.Nsteps+i0,self.config.Nsteps+i1)
+                sl=slice(self.config.Nsteps_in+i0,self.config.Nsteps_in+i1)
                 nn_pred_total[sl]=nn_pred
                 i0=i1
                 i1+=self.config.Nbatch
@@ -341,11 +343,15 @@ class NNModel(object):
         return nn_pred_total
 
     
-    def restore_model(self,sess,model_name,num):
+    def restore_model(self,sess,model_name,num=None):
         """Attempts to reset both TF graph, and 
         RNN stored variables/structure.
         """
-        saver=tf.train.import_meta_graph(model_name+'.meta')
+        if (num==None):
+            full_model_name=model_name+'-'+str(self.config.Nepoch)
+        else:
+            full_model_name=model_name+'-'+str(num)
+        saver=tf.train.import_meta_graph(full_model_name+'.meta')
         #restore graph structure
         self.X=tf.get_collection('X')[0]
         self.y=tf.get_collection('y')[0]
@@ -353,7 +359,7 @@ class NNModel(object):
         self.train=tf.get_collection('train')[0]
         self.loss=tf.get_collection('loss')[0]
         #restores weights etc.
-        saver.restore(sess,model_name+'-'+str(num))
+        saver.restore(sess,full_model_name)
     
 class recurrent_NN(NNModel):
     """
