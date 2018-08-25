@@ -96,7 +96,9 @@ class NNModel(object):
         config - instance of NNModel with parameters.
         """
         self.config=config
+        self.keep_prob=self.config.keep_prob
         #makes the tensor flow graph.
+        
         self.build()
 
     def build(self):
@@ -305,7 +307,10 @@ class NNModel(object):
             tf.reset_default_graph()        
         self.is_training=False
         self.keep_prob=1
-        full_model_name=model_name+'-{}'.format(num)
+        if (num==None):
+            full_model_name=model_name+'-{}'.format(self.config.Nepoch)
+        else:
+            full_model_name=model_name+'-{}'.format(num)           
         with tf.Session() as sess:
             saver=tf.train.import_meta_graph(full_model_name+'.meta')
             #restore graph structure
