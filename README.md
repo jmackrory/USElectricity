@@ -1,4 +1,4 @@
-# US-Electricity
+# Exploring the US Electrical Grid and Demand Forecasting
 
 ## Project Summary
 
@@ -16,8 +16,8 @@ This project has two phases: one exploring electricity power generation in the U
 and trying to forecast electricity demand based on two years worth of hourly time data, and weather
 data.
 The project will use Python and Pandas to explore the data, along with a little SQL, as the data are too large to fit into Pandas dataframes.
-I have tried to develop a seasonal exponential smoothing model  (EBA_seasonal.ipynb) for electricity demand, as well
-as a recurrent neural network model (EBA_RNN.ipynb)
+I have tried to develop a seasonal exponential smoothing model  (EBA\_seasonal.ipynb) for electricity demand, as well
+as a recurrent neural network model (EBA\_RNN.ipynb)
 Currently, this work focuses just on Portland, but could be generalized to include other locations.
 Both models take the temperature, and prior demand, and attempt to forecast for the next 24 hour 
 period. 
@@ -26,7 +26,7 @@ period.
 
 The electricity datasets were downloaded as bulk files from https://www.eia.gov/electricity/data.php.
 The real-time electricity data (EBA.txt) was downloaded from the EIA in October 2017,
-alongside a more general dataset on the grid (ELEC.txt) from in January 2017. 
+alongside a more general dataset on the grid (ELEC.txt) from January 2017. 
 
 ELEC.txt has state and plant level statistics, with monthly and quarterly resolution.
 The data include total generation across the US for all sources, quality of fuels, price, and others.
@@ -52,19 +52,19 @@ This repo includes the following files:
 Split roughly according to acquiring data, loading data, exploring data, and bulding models.
 
 ### Acquiring/loading data utilities:
-  - get_weather_data.py - match airport codes for largest cities with weather station IDs, and download data.
-  - weather_dataframe.py - read in weather data for particular city, state, and convert to pandas dataframe
-  - json_to_sql.py - code to load ELEC file into a SQL database for easier access.  
+  - get\_weather\_data.py - match airport codes for largest cities with weather station IDs, and download data.
+  - weather\_dataframe.py - read in weather data for particular city, state, and convert to pandas dataframe
+  - json\_to\_sql.py - code to load ELEC file into a SQL database for easier access. 
                     SQL was essential for being able to explore the data at all on my laptop. 
   
 ### Exploring data:
-  - ELEC_explore.ipynb  - load ELEC data from SQL database, makes plots of energy mix on regional level. 
+  - ELEC\_explore.ipynb  - load ELEC data from SQL database, makes plots of energy mix on regional level. 
                        Also some exploration of EBA data.
-  - EBA_explore.ipynb - load EBA and weather data, explore, play with patterns, look at data quality.
+  - EBA\_explore.ipynb - load EBA and weather data, explore, play with patterns, look at data quality.
  
 ### Demand Models: 
-  - EBA_seasonal.ipynb - build simple seasonal models account for temperature to predict demand.
-  - EBA_RNN.ipynb - build a recurrent neural network (RNN) on temperature, and demand data. 
-  - EBA_fft.py - functions to try filtering seasonal patterns from FFT of EBA data for use with EBA_seasonal.ipynb.
+  - EBA\_seasonal.ipynb - build simple seasonal models account for temperature to predict demand.
+  - EBA\_RNN.ipynb - build a recurrent neural network (RNN) on temperature, and demand data. 
+  - EBA\_fft.py - functions to try filtering seasonal patterns from FFT of EBA data for use with EBA\_seasonal.ipynb.
 
 
