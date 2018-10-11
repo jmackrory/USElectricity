@@ -61,10 +61,11 @@ class RNNConfig(object):
     Storage class for Recurrent network parameters.
 
     """
-    def __init__(self,Nsteps_in=24, Nsteps_out=24,
+    def __init__(self,Nsteps_in=48, Nsteps_out=24,
                  Ninputs=1, Noutputs=1,
                  cell='RNN',Nlayers=2,Nhidden=100,
-                 lr=0.001,Nepoch=1000,keep_prob=0.5):
+                 lr=0.001,Nepoch=1000,keep_prob=0.5,
+                 Nprint=20,Nbatch=100):
         #number of outputs per input
         self.Noutputs=Noutputs
         self.Ninputs=Ninputs        
@@ -76,11 +77,11 @@ class RNNConfig(object):
         self.Nlayers=Nlayers
         self.Nhidden=Nhidden
         self.lr = lr
-        self.keep_prob=0.5
+        self.keep_prob=keep_prob
         self.Nepoch=Nepoch
-        self.Nprint=20
+        self.Nprint=Nprint
         #only grabbing a fraction of the data
-        self.Nbatch=100
+        self.Nbatch=Nbatch
 
     def __print__(self):
         return self.__dict__
@@ -98,7 +99,6 @@ class NNModel(object):
         self.config=config
         self.keep_prob=self.config.keep_prob
         #makes the tensor flow graph.
-        
         self.build()
 
     def build(self):
@@ -121,7 +121,6 @@ class NNModel(object):
         self.X = tf.placeholder(tf.float32,[None,self.config.Nsteps_in,self.config.Ninputs],name='X')
         #Outputs: n_outputs we want to predict in the future.
         self.y = tf.placeholder(tf.float32,[None,self.config.Nsteps_out,self.config.Noutputs],name='y')
-
 
     #should really fix to use dataset, with batch generator.    
     def create_feed_dict(self,inputs_batch, labels_batch=None):
@@ -259,8 +258,6 @@ class NNModel(object):
         
         with tf.Session() as sess:
             init.run()
-            # if (save_name!=None):
-            #     saver.save(sess,save_name)
             t0=time.time()
             #Use Writer for tensorboard.
             writer=tf.summary.FileWriter("logdir-train",sess.graph)            
@@ -268,12 +265,17 @@ class NNModel(object):
                 #select random starting point.
                 X_batch,y_batch=self.get_random_batch(Xi,yi)
                 current_loss=self.train_on_batch(sess, X_batch, y_batch)
+                
                 t2_b=time.time()
                 if (iteration)%self.config.Nprint ==0:
+                    
                     clear_output(wait=True)
                     print('iter #{}. Current MSE:{}'.format(iteration,current_loss))
                     print('Total Time taken:{}'.format(t2_b-t0))
                     print('\n')
+
+                    nn_pred=self.predict_on_batch(sess,X_batch[:2])
+                    self.plot_data(X_batch[0],y_batch[0],nn_pred[0])
                     #save the weights
                     if (save_name != None):
                         saver.save(sess,save_name,global_step=iteration,
@@ -282,12 +284,35 @@ class NNModel(object):
                     loss_tot[int(iteration/self.config.Nprint)]=current_loss
             writer.close()
             #Manual plotting of loss.  Writer/Tensorboard supercedes this .
-            plt.figure()                            
-            plt.plot(loss_tot)
-            plt.ylabel('Error')
-            plt.xlabel('Iterations x{}'.format(self.config.Nprint))
-            plt.show()
+            self.plot_losses(loss_tot)
 
+    def plot_losses(self,loss_tot):
+        """plot_losses
+        Make linear and log-plots of losses for the latest batch.
+        """
+        plt.figure()
+        plt.subplot(121)
+        plt.plot(loss_tot)
+        plt.ylabel('Error')
+        plt.xlabel('Iterations x{}'.format(self.config.Nprint))
+        plt.subplot(122)
+        plt.semilogy(loss_tot)
+        plt.ylabel('Error')
+        plt.xlabel('Iterations x{}'.format(self.config.Nprint))
+        plt.show()
+        return None
+        
+    def plot_data(self,X,y,pred):
+        plt.figure()
+        t1=np.arange(self.config.Nsteps_in)
+        t2=self.config.Nsteps_in+np.arange(self.config.Nsteps_out)
+        plt.plot(t1,X)
+        plt.plot(t2,y,label='actual')
+        plt.plot(t2,pred,label='predicted')
+        plt.legend()
+        plt.show()
+        return None
+            
     def predict_all(self,input_data,model_name,num=None,reset=False):
         """predict_all
         Load a saved Neural network, and predict the output labels
@@ -347,26 +372,30 @@ class NNModel(object):
                 X_batch=np.zeros((Nb,self.config.Nsteps_in,self.config.Ninputs))
 
                 #initialize some variables to get started.
-                j0=i0;  j1=i0;
+                j0=i0;  j1=i0; j2=i0;
                 for i in range(Nb):
-                    j0=j1; j1=j0+self.config.Nsteps_out
+                    j0=j2;
+                    j1=j0+self.config.Nsteps_in
+                    j2=j0+self.config.Nsteps_out
                     X_batch[i,:,:]=input_data[j0:j1,:]
                     #step forward by Nsteps_out to forecast next period.
                     
                 nn_pred=self.predict_on_batch(sess,X_batch)
                 #now load into output.
-                j1=i0; j0=i0;
+                j2=i0; j0=i0;
                 for i in range(Nb):
                     #step forward by Nsteps_out to forecast next period.
-                    j0=j1;                     
-                    j1=j0+self.config.Nsteps_out                
-                    
-                    if (j1<Nin):
-                        nn_pred_total[j0:j1,:]=nn_pred[i]
+                    # j0=j1;                     
+                    # j1=j0+self.config.Nsteps_out                
+                    j0=j2;
+                    #j1=j0+self.config.Nsteps_in
+                    j2=j0+self.config.Nsteps_out                    
+                    if (j2<Nin):
+                        nn_pred_total[j0:j2,:]=nn_pred[i]
                     else:
                         print('Hit End!')
-                        j1=Nin-1
-                        nn_pred_total[j0:j1,:]=nn_pred[i,j1-j0]
+                        j2=Nin-1
+                        nn_pred_total[j0:j2,:]=nn_pred[i,j2-j0]
                         end_of_file=True
                         break
                 i0=i0+self.config.Nsteps_out*Nb
@@ -418,7 +447,7 @@ class NNModel(object):
         #restores weights etc.
         saver.restore(sess,full_model_name)
     
-class recurrent_NN(NNModel):
+class recurrentNeuralNetwork(NNModel):
     """
     Make a multi-layer recurrent neural network for predicting next days
     stock data.
@@ -442,7 +471,7 @@ class recurrent_NN(NNModel):
         else:
             msg="cell_type must be RNN, LSTM or GRU. cell_type was {}".format(self.config.cell_type)
             raise Exception(msg)
-        #only include dropout when training
+        #always include dropout when training, but tweak keep_prob to turn this off.
         cell=DropoutWrapper(cell,input_keep_prob=self.keep_prob,
                             variational_recurrent=True,
                             input_size=self.config.Nhidden,
@@ -450,9 +479,14 @@ class recurrent_NN(NNModel):
         return cell
     
     def add_prediction_op(self):
-        """The core model to the graph, that
-        transforms the inputs into outputs.
+        """add_prediction_op
+
+        The core model to the graph, that transforms the inputs into outputs.
         Implements deep neural network with relu activation.
+        
+        Maps from Ninputs to Nhidden dimensions for each input timestep.
+        Then has Nlayer RNN with dropout.
+        Then maps outputs from Nhidden to Noutput dimensions.
         """
         #Input matrix to change input dimensions to same size as hidden.
         A=tf.Variable(tf.random_uniform((self.config.Ninputs,self.config.Nhidden)),name="A")
