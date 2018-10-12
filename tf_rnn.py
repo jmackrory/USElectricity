@@ -490,7 +490,10 @@ class recurrentNeuralNetwork(NNModel):
         Then maps outputs from Nhidden to Noutput dimensions.
         """
         #Input matrix to change input dimensions to same size as hidden.
-        A=tf.Variable(tf.random_uniform((self.config.Ninputs,self.config.Nhidden)),name="A",trainable=True)
+        
+        A=tf.Variable(
+            (1+tf.random_uniform((self.config.Ninputs,self.config.Nhidden),-0.25,0.25))/self.config.Ninputs,
+            name="A",trainable=True)
         inputs_reduced=tf.tensordot(self.X,A,axes=[[2],[0]],name='inputs_reduced')
         #Make a cell for each layer 
         cell_list=[]
@@ -503,7 +506,8 @@ class recurrentNeuralNetwork(NNModel):
         Nt2=self.config.Nhidden * self.config.Nsteps_in
         Nt1=self.config.Noutputs * self.config.Nsteps_out
         stacked_rnn_outputs = tf.reshape(rnn_outputs,[-1,Nt2])
-        A_out=tf.Variable(tf.random_uniform((Nt2,Nt1)),name="A_out",trainable=True)
+        A_out=tf.Variable((1+tf.random_uniform((Nt2,Nt1),-0.25,0.25))/Nt2,
+                          name="A_out",trainable=True)
         remapped_outputs=tf.matmul(stacked_rnn_outputs,A_out)
         outputs=tf.reshape(remapped_outputs,[-1,self.config.Nsteps_out,self.config.Noutputs])
         
@@ -535,10 +539,6 @@ class simpleRecurrentNeuralNetwork(NNModel):
         outputs=tf.reshape(stacked_outputs,[-1,self.config.Nsteps_out,self.config.Noutputs])
         return outputs
 
-
-    # def make_RNN_cell(self,fn=tf.nn.relu):
-    #     cell=BasicRNNCell(num_units=self.n_neurons,activation=fn)
-    #     return cell
     
     def get_random_batch(self,X,y):
         """get_random_batch(Xsig,t,n_batch)   
@@ -575,7 +575,7 @@ class simpleRecurrentNeuralNetwork(NNModel):
         Retrieve the outputs of the network for all values of the inputs 
         """
         Nt,Nin=Xin.shape
-        nmax = int(Nt/n_steps)
+        nmax = int(Nt/self.config.Nsteps_out)
         ytot = np.zeros((Nt,1))
         #Note that loading/saving graph is not properly implemented yet.    
         #reset graph, and reload saved graph
@@ -596,7 +596,7 @@ class simpleRecurrentNeuralNetwork(NNModel):
             #restore variables
             saver.restore(sess,model_path)
             for i in range(nmax-1):
-                n0=n_steps*i
+                n0=self.config.Nsteps_out*i
                 n1 = n0+self.config.Nsteps_out
                 x_sub = Xin[n0:n1,:]
                 x_sub = x_sub.reshape(-1,self.config.Nsteps_out,Nin)
