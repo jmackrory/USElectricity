@@ -1,11 +1,22 @@
-#Bunch of functions for creating new SQL database.
+# sql_lib.py
 #
-# create_new_database
-# create_fresh_table
-# check_and_create_columns
+# Bunch of functions for creating new PostGRESQL database using psycopg2
+# Also some functions for querying that table and returning
+# a pandas dataframe
+#
+# Functions for making new table:
+# - create_new_database
+# - create_fresh_table
+# - check_and_create_columns
+#
+# Functions for calling the table:
+# - safe_sql_query
+# - get_column_query
+# - get_dataframe
 
 import psycopg2
 import psycopg2.sql as sql
+import pandas as pd
 
 #Make new database by logging into 
 def create_new_database(database_name):
@@ -80,3 +91,73 @@ def check_and_create_columns(table_name,cur,df):
 			q3 = sql.SQL("ALTER TABLE {0} ADD COLUMN {1} TEXT").format(t1,c1)
 			cur.execute(q3)
 	return None
+
+#make SQL queries, with desired list of columns in "out_columns".
+#Assume we are searching through name for entries with desired type of series, for particular states,
+#as well as generation type.
+def safe_sql_query(table_name, out_columns, match_names, freq):
+    """safe_sql_query(table_name, out_column, match_names, freq)
+    Extract a set of columns where the name matches certain critera.
+
+    Input:
+    table_name - name for table
+    out_columns - list of desired columns
+    match_names - desired patterns that the name must match.  (All joined via AND)
+    freq   - desired frequency     
+
+    Return: 
+    sql query to carry out desired command.
+    """
+
+    col_query=sql.SQL(' ,').join(map(sql.Identifier,out_columns))
+    #make up categories to match the name by.
+    namelist=[];
+    for namevar in match_names:
+        namelist.append(sql.Literal('%'+namevar+'%'))
+        #join together these matches with ANDs to match them all
+        name_query=sql.SQL(' AND name LIKE ').join(namelist)
+    #Total SQL query to select desired columns with features 
+    q1 = sql.SQL("SELECT {0} FROM {1} WHERE (name LIKE {2} AND f LIKE {3}) ").format(
+        col_query,
+        sql.Identifier(table_name),
+        name_query,
+        sql.Literal(freq))
+    return(q1)
+
+def get_column_query(table_name, out_column):
+    """get_column_query(table_name, out_column)
+    Return SQL query to extract 'out_column' from 'table_name'
+    """
+    #make up categories to match the name by.
+    #Total SQL query to select desired columns with features 
+    q1 = sql.SQL("SELECT {0} FROM {1}").format(
+        sql.Identifier(out_column),
+        sql.Identifier(table_name))
+    return(q1)
+
+#Get a dataframe from SQL database for given psycopg2 cursor,
+#with desired output columns.     
+#Must select data based on series type, state, and type of generation.
+def get_dataframe(cur, table_name, out_columns, match_names, freq):
+    """get_dataframe(cur, table_name, out_columns, match_names, freq)
+    Generate pandas dataframe from calling SQL database. 
+    Dataframe will contain 'out_columns', in cases where the names 
+    contain all of the entries in 'match_names'
+
+    Input: cur - psycopg2 cursor connected to database
+    table_name -SQL table name
+    out_columns - columns to extract from SQL
+    match_names - list of strings that the 'name' must match
+    freq      - desired frequency
+
+    Output:
+    df  - pandas Dataframe
+    """
+    
+    q = safe_sql_query(table_name,out_columns,match_names,freq)
+    cur.execute(q);
+    df0=cur.fetchall();
+    df = pd.DataFrame(df0,columns=out_columns);
+    return df
+   
+
