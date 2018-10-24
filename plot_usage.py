@@ -1,10 +1,14 @@
 # Code lifted wholesale from shade_states example
 # in Basemap docs.
+# Split to make it possible to save/load cached shapes for faster
+# plotting.
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap as Basemap
 from matplotlib.colors import rgb2hex, Normalize
 from matplotlib.patches import Polygon
 from matplotlib.colorbar import ColorbarBase
+from matplotlib.collections import LineCollection
 import numpy as np 
 import pickle
 import warnings
@@ -43,7 +47,6 @@ def create_instance():
         # #Need to figure out how to picke that shape info, and reload
         # pickle.dump(shp_info,open('data/usstates_info.pickle','wb'),-1)
         # pickle.dump(shp_info_,open('data/usstates_info2.pickle','wb'),-1)                
-        
     return m, m_
 
 def make_pop_data():
@@ -119,13 +122,13 @@ def plot_us_data(fig,ax,m,m_,data,label_text,title_text):
         statename = shapedict['NAME']
         # skip DC and Puerto Rico.
         if statename not in ['District of Columbia','Puerto Rico']:
-            pop = data[statename]
+            val = data[statename]
             # calling colormap with value between 0 and 1 returns
             # rgba value.  Invert color range (hot colors are high
             # population), take sqrt root to spread out colors more.
-            if np.isnan(pop):
-                pop=vmin
-            colors[statename] = cmap( ((pop-vmin)/(vmax-vmin)) )[:3]
+            if np.isnan(val):
+                val=vmin
+            colors[statename] = cmap( ((val-vmin)/(vmax-vmin)) )[:3]
         statenames.append(statename)
 
     #%% ---------  cycle through state names, color each one.  --------------------
@@ -133,28 +136,33 @@ def plot_us_data(fig,ax,m,m_,data,label_text,title_text):
         # skip DC and Puerto Rico.
         if statenames[nshape] not in ['Puerto Rico', 'District of Columbia']:
             color = rgb2hex(colors[statenames[nshape]])
-            poly = Polygon(seg,facecolor=color,edgecolor=color)
+            poly = Polygon(seg,facecolor=color,edgecolor='black',
+                           linewidth=0.1)
             ax.add_patch(poly)
-    AREA_1 = 0.005  # exclude small Hawaiian islands that are smaller than AREA_1
-    AREA_2 = AREA_1 * 30.0  # exclude Alaskan islands that are smaller than AREA_2
-    AK_SCALE = 0.19  # scale down Alaska to show as a map inset
-    HI_OFFSET_X = -1900000  # X coordinate offset amount to move Hawaii "beneath" Texas
-    HI_OFFSET_Y = 250000    # similar to above: Y offset for Hawaii
-    AK_OFFSET_X = -250000   # X offset for Alaska (These four values are obtained
-    AK_OFFSET_Y = -750000   # via manual trial and error, thus changing them is not recommended.)
+            #added to draw outlines.
+            # line_collect=LineCollection(seg)
+            # ax.add_collection(line_collect)
+            
+    # AREA_1 = 0.005  # exclude small Hawaiian islands that are smaller than AREA_1
+    # AREA_2 = AREA_1 * 30.0  # exclude Alaskan islands that are smaller than AREA_2
+    # AK_SCALE = 0.19  # scale down Alaska to show as a map inset
+    # HI_OFFSET_X = -1900000  # X coordinate offset amount to move Hawaii "beneath" Texas
+    # HI_OFFSET_Y = 250000    # similar to above: Y offset for Hawaii
+    # AK_OFFSET_X = -250000   # X offset for Alaska (These four values are obtained
+    # AK_OFFSET_Y = -750000   # via manual trial and error, thus changing them is not recommended.)
 
-    for nshape, shapedict in enumerate(m_.states_info):  # plot Alaska and Hawaii as map insets
-        if shapedict['NAME'] in ['Alaska', 'Hawaii']:
-            seg = m_.states[int(shapedict['SHAPENUM'] - 1)]
-            if shapedict['NAME'] == 'Hawaii' and float(shapedict['AREA']) > AREA_1:
-                seg = [(x + HI_OFFSET_X, y + HI_OFFSET_Y) for x, y in seg]
-                color = rgb2hex(colors[statenames[nshape]])
-            elif shapedict['NAME'] == 'Alaska' and float(shapedict['AREA']) > AREA_2:
-                seg = [(x*AK_SCALE + AK_OFFSET_X, y*AK_SCALE + AK_OFFSET_Y)\
-                       for x, y in seg]
-                color = rgb2hex(colors[statenames[nshape]])
-            poly = Polygon(seg, facecolor=color, edgecolor='gray', linewidth=.45)
-            ax.add_patch(poly)
+    # for nshape, shapedict in enumerate(m_.states_info):  # plot Alaska and Hawaii as map insets
+    #     if shapedict['NAME'] in ['Alaska', 'Hawaii']:
+    #         seg = m_.states[int(shapedict['SHAPENUM'] - 1)]
+    #         if shapedict['NAME'] == 'Hawaii' and float(shapedict['AREA']) > AREA_1:
+    #             seg = [(x + HI_OFFSET_X, y + HI_OFFSET_Y) for x, y in seg]
+    #             color = rgb2hex(colors[statenames[nshape]])
+    #         elif shapedict['NAME'] == 'Alaska' and float(shapedict['AREA']) > AREA_2:
+    #             seg = [(x*AK_SCALE + AK_OFFSET_X, y*AK_SCALE + AK_OFFSET_Y)\
+    #                    for x, y in seg]
+    #             color = rgb2hex(colors[statenames[nshape]])
+    #         poly = Polygon(seg, facecolor=color, edgecolor='gray', linewidth=.45)
+    #         ax.add_patch(poly)
 
 
     #%% ---------  Plot bounding boxes for Alaska and Hawaii insets  --------------
