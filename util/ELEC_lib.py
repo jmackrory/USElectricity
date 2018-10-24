@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from util.sql_lib import get_dataframe
 
 def convert_data(df):
     """convert_data(df)
@@ -57,11 +58,15 @@ def plot_data_frame(df,title,xlabel,ylabel,labels=None,logy=False):
     plt.show()
     return
 
-def plot_generation_by_state(state):
+def plot_generation_by_state(cur,state):
     """plot_generation_by_state
     Takes a states name, and looks up net generation amounts across all 
     sectors on a monthly frequency from SQL.  
     Then plots the results.
+
+    Inputs: cur - psycopg2 cursor
+    state - string with full state name, e.g. Oregon.
+
     """
     out_col=('name','data','start','end','f')
     match_names=['Net generation',': '+state+' :',': all sectors :'];    
@@ -78,3 +83,88 @@ def plot_generation_by_state(state):
     xlabel='Date',
     ylabel='Net Generation (GWh)',title='Generation Across '+state+' by source',
     labels=gen_labels,logy=False)
+
+def plot_retail_price(cur,region):
+    us_price=pd.DataFrame()
+    out_col=('name','data','start','end','f')    
+    match_names=['retail price',': '+region+' :'];    
+    us_price=get_dataframe(cur,'ELEC',out_col,match_names,freq='M');
+    data0=convert_data(us_price)
+    us_price['data2']=data0
+    labels=us_price['name'].str.split(':').apply(lambda x:x[2])    
+    plot_data_frame(us_price,
+                    xlabel='Date',
+                    ylabel='Average cost (c/kWh)',
+                    title='Average Retail Price of Electricity Across '+region,
+                    labels=labels,
+                    logy=False)    
+
+def plot_customers(cur, region):
+    """plot_customers(cur,region)
+    
+    Plot number of customer accounts from ELEC table in a region
+    Inputs: cur - psycopg2 cursor
+    region - string for State/Region name
+    """
+    us_price=pd.DataFrame()
+    out_col=('name','data','start','end','f')        
+    match_names=['customer accounts',': '+region+' :'];    
+    us_price=get_dataframe(cur,'ELEC',out_col,match_names,freq='M');
+    data0=convert_data(us_price)
+    us_price['data2']=data0
+    plot_data_frame(us_price,
+    xlabel='Date',
+    ylabel='Number',title='Number of Customers Across '+region,logy=False)
+
+def get_state_data(cur,year):
+    """get_state_data
+    Gets all generation data by state for a given year.
+    Useful for plotting usage on map.
+
+    """
+    #get a list of series IDs
+    state_names = (
+    'New Jersey',    'Rhode Island',    'Massachusetts',    'Connecticut',
+    'Maryland',    'New York',    'Delaware',    'Florida',
+    'Ohio',    'Pennsylvania',    'Illinois',    'California',
+    'Hawaii',    'Virginia',    'Michigan',    'Indiana',
+    'North Carolina',    'Georgia',    'Tennessee',    'New Hampshire',
+    'South Carolina',    'Louisiana',    'Kentucky',    'Wisconsin',
+    'Washington',    'Alabama',    'Missouri',    'Texas',
+    'West Virginia',    'Vermont',    'Minnesota',    'Mississippi',
+    'Iowa',    'Arkansas',    'Oklahoma',    'Arizona',
+    'Colorado',    'Maine',    'Oregon',    'Kansas',
+    'Utah',    'Nebraska',    'Nevada',    'Idaho',
+    'New Mexico',    'South Dakota',    'North Dakota',    'Montana',
+    'Wyoming',    'Alaska')
+
+    state_abbr=(
+    'NJ',  'RI',    'MA',    'CT',
+    'MD',    'NY',    'DE',    'FL',
+    'OH',    'PA',    'IL',    'CA',
+    'HI',    'VA',    'MI',    'IN',
+    'NC',    'GA',    'TN',    'NH',
+    'SC',    'LA',    'KY',    'WI',
+    'WA',    'AL',    'MO',    'TX',
+    'WV',    'VT',    'MN',    'MS',
+    'IA',    'AR',    'OK',    'AZ',
+    'CO',    'ME',    'OR',    'KS',
+    'UT',    'NE',    'NV',    'ID',
+    'NM',    'SD',    'ND',    'MT',
+    'WY',    'AK')
+
+    gen_types=['HYC','TSN','WND','COW','NUC','NG','ALL']
+
+    df_results=pd.DataFrame(columns=gen_types,index=state_names)
+
+    for i,state in enumerate(state_abbr):
+        for j,gen in enumerate(gen_types):
+            sql_str="""
+            SELECT series_id,obs_date,obs_val FROM "elec_gen"
+            WHERE series_id LIKE 'ELEC.GEN.{ser}-{state}-99.A' AND obs_date= DATE '{year}-12-31'""".format(ser=gen,state=state,year=year)
+            cur.execute(sql_str)
+            r=cur.fetchone()
+            if r is not None:
+                df_results.iloc[i,j]=r[2]
+    return df_results
+    
