@@ -1,6 +1,6 @@
 #A Bunch of FFT filtering routines I wrote to help detrend the
 # hourly electricity data from the EBA dataset, from the EIA.
-# Goes with EIA_explore.ipynb.
+# Goes with EBA_explore.ipynb.
 
 #Also includes filtering functions to handle missing data, and average
 #down peaks: remove_na
@@ -13,6 +13,9 @@ def avg_extremes(df,window=2):
     """avg_extremes(df)
     Replace extreme outliers, or zero values with the average on either side.
     Suitable for occasional anomalous readings.
+    Input: df - pandas dataframe
+           window - integer for number of steps to use in averaging
+    Returns df - modified input dataframe
     """
     mu=df.mean()
     sd=df.std()
@@ -29,6 +32,9 @@ def avg_extremes(df,window=2):
 def remove_na(df,window=2):
     """remove_na(df)
     Replace all NA values with the mean value of the series.
+    Input: df - pandas dataframe
+           window - integer for number of steps to use in averaging
+    Returns df - modified input dataframe
     """
     na_msk=np.isnan(df.values)
     #first pass:replace them all with the mean value - if a whole day is missing.
@@ -41,6 +47,97 @@ def remove_na(df,window=2):
     for i in ind:
         df.iloc[i]=(df.iloc[i-window]+df.iloc[i-window])/2
     return df
+
+def make_seasonal_plots(dem,temp,per,nlags):
+    """Make seasonal decomposition of temperature, and demand curves.
+    Plots those decompositions, and their correlation/autocorrelation plots.
+    dem- input demand series
+    temp-input temperature series
+    per - input date to index on for plotting, e.g. '2016-03'
+    nlags - number of lags for correlation plots.
+    """
+    #Carry out the "demand" and "temperature" seasonal decompositions.
+    dem_decomposition = seasonal_decompose(dem,two_sided=False)
+    dem_mu=dem.mean()
+    dem_trend = dem_decomposition.trend/dem_mu  #Find rolling average over most important period.
+    dem_seasonal = dem_decomposition.seasonal/dem_mu  #Find the dominant frequency components
+    dem_residual = dem_decomposition.resid/dem_mu  #Whatever is left.
+
+    temp_decomposition = seasonal_decompose(temp,two_sided=False)
+    temp_mu=temp.mean()
+    temp_trend = temp_decomposition.trend/temp_mu  #Find rolling average over most important period.
+    temp_seasonal = temp_decomposition.seasonal/temp_mu  #Find the dominant frequency components
+    temp_residual = temp_decomposition.resid/temp_mu  #Whatever is left.
+
+    # numna= lambda x:np.sum(np.isnan(x))
+    # print('NA:(trend,seasonal,residual,whole)',numna(temp_trend),numna(temp_seasonal),numna(temp_residual),numna(temp))
+
+    #Plot out the decompositions
+    plt.figure(figsize=(15,9))
+    plt.title('Normalized Seasonal Decomposition')
+    plt.subplot(411)
+    plt.plot(dem_trend[per],'b',temp_trend[per],'k')
+    plt.ylabel('Trend')
+    plt.subplot(412)
+    plt.plot(dem_seasonal[per],'b',temp_seasonal[per],'k')
+    plt.ylabel('Seasonal Oscillation')
+    plt.subplot(413)
+    plt.plot(dem_residual[per],'b',temp_residual[per],'k')
+    plt.ylabel('Residuals')
+    plt.subplot(414)
+    plt.plot(dem[per]/dem_mu,'b',temp[per]/temp_mu,'k')
+    plt.ylabel('Data')
+    plt.show()
+
+    #Plot the auto-correlation plots.
+    nlags=np.min([len(dem[per])-1,nlags,len(temp[per])-1])
+    print('Nlags',nlags)
+    #plt.figure(figsize=(10,6))
+    fig, (ax1, ax2) = plt.subplots(1,2)
+    plot_acf(temp_residual[per],'b-x','Temp Residual',ax1,ax2,nl=nlags)
+    plot_acf(dem_residual[per],'r-+','Demand Residual',ax1,ax2,nl=nlags)
+    plt.legend()
+    plt.show()
+    #plt.figure(figsize=(10,6))
+    fig, (ax1, ax2) = plt.subplots(1,2)
+    plot_acf(temp[per],'b-x','Temp',ax1,ax2,nl=nlags)
+    plot_acf(dem[per],'r-+','Demand',ax1,ax2,nl=nlags)
+    plt.legend()
+    plt.show()
+
+    return None
+
+def plot_acf(ts,ls,line_label,ax1,ax2,nl=50):
+    """plot_acf(ts,ls,line_label,ax1,ax2,nl)
+    Plot the auto-correlation plots for a timeseries (ts) up to a given number of lags (nl)
+    Give a specific linestyle (ls), and label.
+    Inputs:
+    ts - time series
+    ls - line style to use when plotting
+    line_label - label for this times seris
+    ax1, ax2 - axes for sub-plots
+    nl - number of lags
+    """
+    #Actually do those auto-corellations, on the series, and its absolute value.
+    ts2 = ts[np.isfinite(ts)]
+    lag_acf = acf(ts2,nlags=nl)
+    lag_pacf=pacf(ts2,nlags=nl,method='ols')
+    #5% confidence intervals.
+    sd = 1.96/np.sqrt(len(ts2))
+    #Make some pretty subplots.
+    plt.title('Auto Correlation')
+    plt.axhline(y=sd,color='gray')
+    plt.axhline(y=-sd,color='gray')
+    plt.xlabel('Lag')
+    ax1.plot(lag_acf,ls,label=line_label)   
+    plt.title('Partial Auto Correlation')
+    plt.xlabel('Lag')
+    plt.axhline(y=sd,color='gray')
+    plt.axhline(y=-sd,color='gray')
+    ax2.plot(lag_pacf,ls,label=line_label)    
+    return None
+
+
 
 def remove_square_peak(Y,f,center,width):
     """remove_yearly
@@ -178,3 +275,13 @@ def plot_pred(series_list,label_list):
         plt.plot(s,label=l)    
     plt.legend()
     plt.show()
+
+def rmse(x,y):
+    z = np.sqrt(np.sum((x-y)*(x-y))/len(x))
+    return z
+
+def mape(x,y):
+    z = np.mean(np.abs((1-x/y)))
+    return z    
+
+
