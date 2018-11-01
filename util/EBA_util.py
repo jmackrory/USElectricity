@@ -8,6 +8,8 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.stattools import adfuller, acf, pacf, arma_order_select_ic
 
 def avg_extremes(df,window=2):
     """avg_extremes(df)
@@ -92,16 +94,17 @@ def make_seasonal_plots(dem,temp,per,nlags):
     #Plot the auto-correlation plots.
     nlags=np.min([len(dem[per])-1,nlags,len(temp[per])-1])
     print('Nlags',nlags)
-    #plt.figure(figsize=(10,6))
-    fig, (ax1, ax2) = plt.subplots(1,2)
+    plt.figure(figsize=(10,6));
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=(10,6))
     plot_acf(temp_residual[per],'b-x','Temp Residual',ax1,ax2,nl=nlags)
     plot_acf(dem_residual[per],'r-+','Demand Residual',ax1,ax2,nl=nlags)
     plt.legend()
+    plt.title('ACF for Residual')
     plt.show()
-    #plt.figure(figsize=(10,6))
-    fig, (ax1, ax2) = plt.subplots(1,2)
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=(10,6))
     plot_acf(temp[per],'b-x','Temp',ax1,ax2,nl=nlags)
     plot_acf(dem[per],'r-+','Demand',ax1,ax2,nl=nlags)
+    plt.title('ACF for Raw')
     plt.legend()
     plt.show()
 
@@ -116,7 +119,7 @@ def plot_acf(ts,ls,line_label,ax1,ax2,nl=50):
     ls - line style to use when plotting
     line_label - label for this times seris
     ax1, ax2 - axes for sub-plots
-    nl - number of lags
+    nl - maximum number of lags to consider
     """
     #Actually do those auto-corellations, on the series, and its absolute value.
     ts2 = ts[np.isfinite(ts)]
@@ -125,15 +128,16 @@ def plot_acf(ts,ls,line_label,ax1,ax2,nl=50):
     #5% confidence intervals.
     sd = 1.96/np.sqrt(len(ts2))
     #Make some pretty subplots.
-    plt.title('Auto Correlation')
-    plt.axhline(y=sd,color='gray')
-    plt.axhline(y=-sd,color='gray')
-    plt.xlabel('Lag')
-    ax1.plot(lag_acf,ls,label=line_label)   
-    plt.title('Partial Auto Correlation')
-    plt.xlabel('Lag')
-    plt.axhline(y=sd,color='gray')
-    plt.axhline(y=-sd,color='gray')
+    ax1.axhline(y=sd,color='gray')
+    ax1.axhline(y=-sd,color='gray')
+    ax1.set_xlabel('Lag')
+    ax1.set_ylabel('Auto Correlation')
+    ax1.plot(lag_acf,ls,label=line_label)
+    
+    ax2.axhline(y=sd,color='gray')
+    ax2.axhline(y=-sd,color='gray')
+    ax2.set_xlabel('Lag')
+    ax2.set_ylabel('Partial Auto Correlation')    
     ax2.plot(lag_pacf,ls,label=line_label)    
     return None
 
