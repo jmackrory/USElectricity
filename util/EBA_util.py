@@ -57,6 +57,8 @@ def make_seasonal_plots(dem,temp,per,nlags):
     temp-input temperature series
     per - input date to index on for plotting, e.g. '2016-03'
     nlags - number of lags for correlation plots.
+    Side_effects: 4x1 array of plots decomposing signals
+    2x2 array of autocorrelation plots for residuals and raw data.
     """
     #Carry out the "demand" and "temperature" seasonal decompositions.
     dem_decomposition = seasonal_decompose(dem,two_sided=False)
@@ -71,11 +73,8 @@ def make_seasonal_plots(dem,temp,per,nlags):
     temp_seasonal = temp_decomposition.seasonal/temp_mu  #Find the dominant frequency components
     temp_residual = temp_decomposition.resid/temp_mu  #Whatever is left.
 
-    # numna= lambda x:np.sum(np.isnan(x))
-    # print('NA:(trend,seasonal,residual,whole)',numna(temp_trend),numna(temp_seasonal),numna(temp_residual),numna(temp))
-
     #Plot out the decompositions
-    plt.figure(figsize=(15,9))
+    plt.figure(figsize=(8,6))
     plt.title('Normalized Seasonal Decomposition')
     plt.subplot(411)
     plt.plot(dem_trend[per],'b',temp_trend[per],'k')
@@ -88,20 +87,19 @@ def make_seasonal_plots(dem,temp,per,nlags):
     plt.ylabel('Residuals')
     plt.subplot(414)
     plt.plot(dem[per]/dem_mu,'b',temp[per]/temp_mu,'k')
-    plt.ylabel('Data')
+    plt.ylabel('Raw Data')
     plt.show()
 
     #Plot the auto-correlation plots.
     nlags=np.min([len(dem[per])-1,nlags,len(temp[per])-1])
     print('Nlags',nlags)
-    plt.figure(figsize=(10,6));
-    fig, (ax1, ax2) = plt.subplots(1,2,figsize=(10,6))
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
     plot_acf(temp_residual[per],'b-x','Temp Residual',ax1,ax2,nl=nlags)
     plot_acf(dem_residual[per],'r-+','Demand Residual',ax1,ax2,nl=nlags)
     plt.legend()
     plt.title('ACF for Residual')
     plt.show()
-    fig, (ax1, ax2) = plt.subplots(1,2,figsize=(10,6))
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
     plot_acf(temp[per],'b-x','Temp',ax1,ax2,nl=nlags)
     plot_acf(dem[per],'r-+','Demand',ax1,ax2,nl=nlags)
     plt.title('ACF for Raw')
@@ -131,13 +129,13 @@ def plot_acf(ts,ls,line_label,ax1,ax2,nl=50):
     ax1.axhline(y=sd,color='gray')
     ax1.axhline(y=-sd,color='gray')
     ax1.set_xlabel('Lag')
-    ax1.set_ylabel('Auto Correlation')
+    ax1.set_ylabel('Auto Correlation',labelpad=2)
     ax1.plot(lag_acf,ls,label=line_label)
     
     ax2.axhline(y=sd,color='gray')
     ax2.axhline(y=-sd,color='gray')
     ax2.set_xlabel('Lag')
-    ax2.set_ylabel('Partial Auto Correlation')    
+    ax2.set_ylabel('Partial Auto Correlation',labelpad=2)    
     ax2.plot(lag_pacf,ls,label=line_label)    
     return None
 
