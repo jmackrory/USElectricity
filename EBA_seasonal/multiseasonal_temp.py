@@ -1,10 +1,16 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+#to prevent creating huge logs.
+from IPython.display import clear_output
+
+
 class multiseasonal_temp(object):
     """multiseasonal_temp
 
-    Extends multiseasonal model to include temperature inputs.
+    Extends multiseasonal exponential smoothing model to include temperature inputs.
+
+    Uses analytical expressions for gradients to optimize.
 
     Models temperature effects via: 
     D~ A_n[T_n-T]_{+} + A_p[T-T_p]_{+}, where
@@ -12,7 +18,7 @@ class multiseasonal_temp(object):
     """
     def __init__(self, l=0, b=0, s=np.zeros((2,24)), \
     alpha=0.1, beta=0.1, gamma=np.zeros((2,2)), \
-    A0=2000, Ap=10, An=10,Tp=200, Tn=100):
+    Ap=10, An=10,Tp=200, Tn=100):
         self.l=l
         self.b=b
         self.s=s
@@ -72,9 +78,9 @@ class multiseasonal_temp(object):
         ##average value
         self.l = np.mean(yval)
         ##average shift
-        self.b = (yval[ninit-1]-yval[0])/ninit
+        #self.b = (yval[ninit-1]-yval[0])/ninit
         ##remove mean pattern, subtract off level, and linear trend.
-        ysub = ysub-self.l-self.b*np.arange(ninit)
+        ysub = ysub-self.l#-self.b*np.arange(ninit)
         #mean seasonal pattern.
         #second seasonal pattern is for weekends, with days
         #Saturday/Sunday have dayofweek equal to 5 and 6.
@@ -92,7 +98,7 @@ class multiseasonal_temp(object):
              self.s[1,:] = self.s[1,:]+y_end[n*24:(n+1)*24]/n2
 
     def predict_dayahead(self,y,T):
-        """predict_correct_dayahead
+        """predict_dayahead
         Predict day-ahead demand given previous parameters.
         """
         t0=y.index
@@ -101,7 +107,7 @@ class multiseasonal_temp(object):
         m2 = t0.hour
         #find temp trend.
         Ttrend= self.Tmodel(T[t0])
-        trend=self.l+self.b*np.arange(len(y))
+        trend=self.l#+self.b*np.arange(len(y))
         season=self.s[m1.astype(int),m2]
         #make prediction based on current estimates
         ypred =Ttrend+ trend+season
@@ -116,11 +122,12 @@ class multiseasonal_temp(object):
         m1_n = t0.dayofweek<5        
         eps = y-ypred
         eps_l = np.mean(eps)
-        self.l +=  self.alpha*eps_l
+        self.l = self.l+ self.alpha*eps_l
         eps=eps-eps_l
-        eps_b = (eps[-1]-eps[0])/len(eps)
-        self.b +=  self.beta*eps_b
-        eps=eps-eps_b*np.arange(len(eps))
+        # eps_b = (eps[-1]-eps[0])/len(eps)
+        # self.b = self.b+ self.beta*eps_b
+        #subtract off estimated trend
+        #eps=eps-eps_b*np.arange(len(eps))
         ds = np.dot(self.gamma(),np.array([m1_n,m1]))*[eps,eps]
         self.s = self.s + ds
 
@@ -137,7 +144,7 @@ class multiseasonal_temp(object):
         ti = y[:ninit].index
         msk=ti.dayofweek>=5
         Ttrend= self.Tmodel(T[ti])
-        trend = self.l+self.b*np.arange(ninit)
+        trend = self.l#+self.b*np.arange(ninit)
         season= self.s[msk.astype(int),ti.hour.values]
 
         ypred[:ninit] =Ttrend+trend+season
@@ -146,9 +153,6 @@ class multiseasonal_temp(object):
             ypred[tslice] = self.predict_dayahead(y[tslice],T[tslice])
             self.correct_dayahead(y[tslice],ypred[tslice])
             
-        # if i%(24*7) ==0:
-        #        print("l: {} b: {}\n".format(str(l),str(b)))
-        #        print(s,"\n")
         ypred=pd.Series(ypred,index=y.index)        
         return ypred
 
@@ -171,7 +175,7 @@ class multiseasonal_temp(object):
         #loop over iterations
         for i in range(nmax):
             dJ_max=0
-            lr = lr*0.99
+            lr = lr*0.999
             #for each name, tweak the model's variables.
             oldJ=J            
             for n in self.names:
@@ -181,14 +185,12 @@ class multiseasonal_temp(object):
                 pred=self.STL_dayahead(y,T,ninit=ninit)
                 J2=self.rmse(y[ninit:],pred[ninit:])
                 dJ = (J2-J)/(eta*p0)
-                #dJ = (J2-J)/J                
-                #actually update 
-                #p = p0-lr*dJ/(eta)
                 #use mod to truncate gradient.
                 if n in self.smooth_names:
                     p = p0-lr*np.fmod(dJ,1)
                 else:
                     p = p0-lr*dJ
+                    print(n,p,p0)
                     #restrict smoothing parameters to be within [0,1].
                 p=self.check_limits(n,p,p0)
                 self.__setattr__(n,p)
@@ -196,12 +198,14 @@ class multiseasonal_temp(object):
                 dJ_max=max(dJ,dJ_max)
             Ni+=1       
             if (dJ_max<rtol):
+                clear_output(wait=True)
                 print("Hit tolerance {} at iter {}".format(dJ,Ni))
                 self.plot_pred([pred,y],['Predicted','Actual'])              
                 return pred
             if(Ni%5==0):
+                clear_output(wait=True)                
                 print("Cost, Old Cost = {},{}".format(J,oldJ))
-                self.plot_pred([pred,y],['Predicted','Actual'])
+                self.plot_pred([pred,y,pred-y],['Predicted','Actual','Error'])
             print('Iter {}.  Cost {}'.format(Ni,J))
             #pv=[]
             # for n in names:
@@ -211,6 +215,7 @@ class multiseasonal_temp(object):
             #self.plot_pred([pred,y],['Predicted','Actual'])
 
             if (J<J_opt):
+                J_opt=J
                 self.save_opt_param()
             elif (J>1.2*J_opt):
                 print('Resetting param to best')
@@ -222,6 +227,89 @@ class multiseasonal_temp(object):
         print("Cost:",J,J2)
         return pred 
 
+    def calc_grad(self,y,pred,T):
+        """calc_grad
+        Uses analytical expressions for gradients to find accumulated gradient.  
+        Use fact this predict a whole 'season' at once.
+        """
+        
+        eps=y-pred
+        ti=y.index
+        Nt = len(eps)
+        Nday = Nt/24
+        #reshape so 24 hour periods.
+        #get average for each day
+        eps_avg = calc_day_avg(eps)
+        #alpha gradient
+        dparam={}
+        dparam['alpha']= np.sum(eps[t0+24:]*eps_avg[t0:-24])
+
+        eps2 = eps-eps_avg
+        eps_grad_avg=calc_day_grad(eps2)
+
+        dparam['beta']= np.sum(eps[t0+24:]*eps_avg[t0:-24])
+        
+        #subtract off average-trend.
+        eps2 = eps-cumsum(eps_grad_avg)
+
+
+        msk0=ti.dayofweek<5
+        msk1=ti.dayofweek>=5
+
+        
+        #g_{ij} finds correction at I_i(t) due to  I_j(t-24)
+        dparam['g00'] = np.sum( msk0[t0+24:]*msk0[t0:-24]*eps2[t0:-24])
+        dparam['g01'] = np.sum( msk0[t0+24:]*msk1[t0:-24]*eps2[t0:-24])
+        dparam['g10'] = np.sum( msk1[t0+24:]*msk0[t0:-24]*eps2[t0:-24])        
+        dparam['g11'] = np.sum( msk1[t0+24:]*msk1[t0:-24]*eps2[t0:-24])        
+
+        m1 = T>self.param['Tp']
+        m2 = T<self.param['Tn']
+        Nt = len(T)
+        #initialize with zeros
+        #Double thresholded model
+        dparam['Ap'] = np.sum( (T[m1]-self.Tp)*(eps[m1]))/Nt
+        dparam['An'] = np.sum( (self.Tn-T[m2])*(eps[m2]))/Nt
+        dparam['Tp'] = -self.Ap*np.sum(eps[m1])/Nt
+        dparam['Tn'] =  self.An*np.sum(eps[m2])/Nt    
+        return dparam
+
+    def calc_day_avg(self,y):
+        """calc_day_avg
+        Given a series y, computes the average within days,
+        and returns a series with the same length as y.
+
+        Input: y - pandas time-series
+
+        """
+        Nt = len(y)
+        Ntime=24
+        Nd = int(Nt/Ntime)
+        y = y.reshape([Nd,Ntime])
+        #y_avg=np.mean(y,axis=1,keepdims=True)
+        y_avg=y[:,0].shape
+        #now repeat for each timestep
+        avg_kron=np.kron(y_avg,np.ones((1,Ntime))).reshape(y.shape)
+        return avg_kron
+
+    def calc_day_grad(self,y):
+        """calc_day_grad
+        Given a series y, computes the average gradient within days,
+        and returns a series with the same length as y.
+
+        Input: y - pandas time-series
+
+        """
+        Nt = len(y)
+        Ntime=24
+        Nd = int(Nt/Ntime)
+        y = y.reshape([Nd,Ntime])
+        y_grad=(y[:,-1]-y[:,0])/Ntime
+        #now repeat for each timestep
+        grad_kron=np.kron(y_grad,np.arange(Ntime)).reshape(y.shape)
+        return grad_kron
+
+    
     def save_opt_param(self):
         """save_opt_param
 
