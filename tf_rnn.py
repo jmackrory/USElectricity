@@ -492,7 +492,7 @@ class recurrentNeuralNetwork(NNModel):
         #Input matrix to change input dimensions to same size as hidden.
         
         A=tf.Variable(
-            (1+tf.random_uniform((self.config.Ninputs,self.config.Nhidden),-0.25,0.25))/self.config.Ninputs,
+            (1+tf.random_uniform((self.config.Ninputs,self.config.Nhidden),-0.1,0.1)/self.config.Ninputs),
             name="A",trainable=True)
         inputs_reduced=tf.tensordot(self.X,A,axes=[[2],[0]],name='inputs_reduced')
         #Make a cell for each layer 
@@ -506,7 +506,8 @@ class recurrentNeuralNetwork(NNModel):
         Nt2=self.config.Nhidden * self.config.Nsteps_in
         Nt1=self.config.Noutputs * self.config.Nsteps_out
         stacked_rnn_outputs = tf.reshape(rnn_outputs,[-1,Nt2])
-        A_out=tf.Variable((1+tf.random_uniform((Nt2,Nt1),-0.25,0.25))/Nt2,
+        #scale outputs so numbers are likely order 1. 
+        A_out=tf.Variable((1+tf.random_uniform((Nt2,Nt1),-0.1,0.1))/Nt2,
                           name="A_out",trainable=True)
         remapped_outputs=tf.matmul(stacked_rnn_outputs,A_out)
         outputs=tf.reshape(remapped_outputs,[-1,self.config.Nsteps_out,self.config.Noutputs])

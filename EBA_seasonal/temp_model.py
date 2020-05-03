@@ -1,8 +1,22 @@
-class just_temp_model:
+import pandas as pd
+import numpy as np
+from util.EBA_util import plot_pred
+
+class temp_model(object):
+    """temp_model
+    Thresholded bi-linear temperature model
+    to demand data.
+    Fits coefficients via gradient descent.
+
+    """
     def __init__(self,names=[],vals=[]):
         self.param= self.param_vec(names,vals)
 
     def param_vec(self,names,vals):
+        """Create pandas series to contain parameter names.
+        (Overkill, but allows simple addition/multiplication etc
+        for labelled parameters)
+        """
         return pd.Series(vals,index=names)
 
     def temp_model(self,T):
@@ -37,7 +51,6 @@ class just_temp_model:
         y=pd.Series(y,name='Predicted Demand',index=T.index)
         return y
 
-
     def temp_model_grad(self,D,Dhat,T):
         """temp_model_grad
         Compute gradients of model w.r.t. parameters.
@@ -63,15 +76,16 @@ class just_temp_model:
         dparam['Tn'] =  self.param['an']*np.sum(Derr[m2])/Nt    
         return dparam
     
-    def param_fit(self,Dhat,T,alpha=0.1,rtol=1E-4,nmax=200):
+    def param_fit(self,Dhat,T,alpha=0.01,rtol=1E-6,nmax=200):
         """Try to fit linear threshold model of demand to temperature.
             D - demand data
             T - temperature data
             Fits model of form:
-            D ~ a_0+ a_p[T-T_p]_+ + a_n[T_n-T]_+,
-            where [f]_+ =f for f>0, and 0 otherwise.
+            D ~ a_0 + a_p[T-T_p]_{+} + a_n[T_n-T]_{+},
+            where [f]_{+} =f for f>0, and 0 otherwise.
 
-            Just use simple gradient descent to fit the model.
+            Just use simple gradient descent to fit the model,
+        with analytical gradients.
         """
         #make parameter estimates
         Dr = np.max(Dhat)-np.min(Dhat)
@@ -105,7 +119,7 @@ class just_temp_model:
                 print('Param:',self.param)
                 print('Param_grad:',dparam)
                 print("Mean param Change {} at iter {}".format( err_change,Ni))
-                plot_pred([Dpred,Dhat,T],['Predicted','Actual','Temp'])
+                plot_pred([Dpred-Dhat,T],['Error','Temp'])
         print("Failed to hit tolerance after {} iter\n".format(iter))
         print("Cost:",J,J2)
         return Dpred 
@@ -120,8 +134,7 @@ class just_temp_model:
         Dr = np.max(Dhat)-np.min(Dhat)
         Tr = np.max(T)-np.min(T)
         param_names=['a0','ap','an','Tp','Tn']
-        #param_vals=300*np.random.random(size=5)
-        param_vals=[np.mean(D),5*Dr/Tr,5*Dr/Tr,150,200]        
+        param_vals=[np.mean(Dhat),5*Dr/Tr,5*Dr/Tr,150,200]        
         self.param=self.param_vec(param_names,param_vals)
         Dpred = self.temp_model(T)    
         dparam=self.temp_model_grad(Dpred,Dhat,T)    

@@ -109,12 +109,16 @@ def plot_customers(cur, region):
     us_price=pd.DataFrame()
     out_col=('name','data','start','end','f')        
     match_names=['customer accounts',': '+region+' :'];    
-    us_price=get_dataframe(cur,'ELEC',out_col,match_names,freq='M');
-    data0=convert_data(us_price)
-    us_price['data2']=data0
-    plot_data_frame(us_price,
-    xlabel='Date',
-    ylabel='Number',title='Number of Customers Across '+region,logy=False)
+    df=get_dataframe(cur,'ELEC',out_col,match_names,freq='M');
+    data0=convert_data(df)
+    df['data2']=data0
+    labels=df['name'].str.split(':').apply(lambda x:x[2])        
+    plot_data_frame(df,
+                    xlabel='Date',
+                    ylabel='Number',
+                    title='Number of Customers Across '+region,
+                    labels=labels,
+                    logy=False)
 
 def get_state_data(cur,year):
     """get_state_data

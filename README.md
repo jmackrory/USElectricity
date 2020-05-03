@@ -5,7 +5,7 @@
 This project aims to explore the US electrical grid using open data from the 
 Energy Information Agency (www.eia.gov/opendata), and to develop models predicting demand for electricity.
 This project includes gathering data, exploring the broad trends of the US electrical grid, and 
-then developing models to forecast day-ahead electricty demand.
+then developing models to forecast day-ahead electricity demand.
 
 One of the key tasks for a power company is to forecast electrical demand for the next day, and ensure
 that adequate electricity is generated to meet that demand.  Overestimating demand wastes energy, 
@@ -49,7 +49,7 @@ city, with the desired station IDs, and downloaded the data for 2015,2016,2017 f
 ## Files Contained:
 
 This repo includes the following files: 
-Split roughly according to acquiring data, loading data, exploring data, and bulding models.
+Split roughly according to acquiring data, loading data, exploring data, and building models.
 
 ### Acquiring/loading data utilities:
   - get\_weather\_data.py - match airport codes for largest cities with weather station IDs, and download data.
@@ -57,14 +57,18 @@ Split roughly according to acquiring data, loading data, exploring data, and bul
   - json\_to\_sql.py - code to load ELEC file into a SQL database for easier access. 
                     SQL was essential for being able to explore the data at all on my laptop. 
   
-### Exploring data:
+### Exploring data notebooks:
   - ELEC\_explore.ipynb  - load ELEC data from SQL database, makes plots of energy mix on regional level. 
                        Also some exploration of EBA data.
   - EBA\_explore.ipynb - load EBA and weather data, explore, play with patterns, look at data quality.
  
-### Demand Models: 
+### Demand Model notebooks: 
   - EBA\_seasonal.ipynb - build simple seasonal models account for temperature to predict demand.
   - EBA\_RNN.ipynb - build a recurrent neural network (RNN) on temperature, and demand data. 
   - EBA\_fft.py - functions to try filtering seasonal patterns from FFT of EBA data for use with EBA\_seasonal.ipynb.
 
-
+### Libraries:
+ - EBA\_RNN.py - code for making a RNN in EBA\_RNN.ipynb
+ - EBA_seasonal/EBA\_multiseasonal.py - code for making a exponential smoothing model.
+ - EBA_seasonal/EBA\_multiseasonal\_temp.py - extends multiseasonal to include temperature.
+ - 

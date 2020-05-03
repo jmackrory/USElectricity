@@ -1,9 +1,8 @@
-
 import tensorflow as tf
 from tensorflow.contrib.layers import fully_connected, l2_regularizer
 
 import numpy as np
-from model import Model
+#from tensorflow.model import Model
 import matplotlib.pyplot as plt
 
 #to prevent creating huge logs.
@@ -11,9 +10,9 @@ from IPython.display import clear_output
 
 class EBA_RNN(object):
 
-    def __init__(self,Xshape):
+    def __init__(self,Nstations=1):
         self.Nsteps=24
-        self.Ninputs=len(temp.iloc[0])+3
+        self.Ninputs=Nstations+3
         self.Nneurons=120
         self.Nlayers=3
         self.Noutputs=1  #number of stations to predict at that time.
@@ -58,7 +57,7 @@ class EBA_RNN(object):
         return feed_dict
 
     def make_RNN_cell(self,Nneurons,fn=tf.nn.relu):
-        cell=BasicRNNCell(num_units=Nneurons,activation=fn)
+        cell=tf.BasicRNNCell(num_units=Nneurons,activation=fn)
         return cell
     
     def add_prediction_op(self):
@@ -70,13 +69,13 @@ class EBA_RNN(object):
         #Make a list of cells to pass along.  
         cell_list=[]
         for i in range(self.Nlayers):
-            cell_list.append(make_RNN_cell(n_neurons,tf.nn.relu))
+            cell_list.append(self.make_RNN_cell(self.Nneurons,tf.nn.relu))
 
         multi_cell=tf.contrib.rnn.MultiRNNCell(cell_list,state_is_tuple=True)
         #Note that using [cell]*n_layers did not work.  Might need to change init_state?
         rnn_outputs,states=tf.nn.dynamic_rnn(multi_cell,X,dtype=tf.float32)
         #this maps the number of hidden units to fewer outputs.
-        stacked_rnn_outputs = tf.reshape(rnn_outputs,[-1,n_neurons])
+        stacked_rnn_outputs = tf.reshape(rnn_outputs,[-1,self.Nneurons])
         stacked_outputs = fully_connected(stacked_rnn_outputs,n_outputs,activation_fn=None)
         outputs=tf.reshape(stacked_outputs,[-1,n_steps,n_outputs])
         
@@ -123,7 +122,7 @@ class EBA_RNN(object):
         Returns:
             predictions: np.ndarray of shape (Nbatch, 1)
         """
-o        feed = self.create_feed_dict(inputs_batch)
+        feed = self.create_feed_dict(inputs_batch)
         predictions = sess.run(self.pred, feed_dict=feed)
         return predictions
 

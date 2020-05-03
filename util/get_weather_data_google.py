@@ -1,5 +1,6 @@
 # Download data sets from NOAA.
 #See weather_dataframe.py for converting this data into a combined dataframe.
+#Same as get_weather_data.py - just has basemap stuff commented out.
 import requests
 import json
 import pandas as pd
@@ -428,6 +429,8 @@ except:
     #write output to csv
     air_df.to_csv('data/air_code_df.gz',compression='gzip',header=True)
 
+#ind=make_weather_multiindex(air_df)
+    
 ##actually download the data from 2015-2017 from the stations listed in air_code_df.  (takes a few minutes)
 #get_all_data(air_df)
 

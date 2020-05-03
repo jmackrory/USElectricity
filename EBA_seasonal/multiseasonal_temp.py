@@ -459,20 +459,24 @@ class multiseasonal_temp(object):
             trend = self.l+self.b*np.arange(self.N0)
             season= self.s[msk.astype(int),ti.hour.values]
             plt.figure(2)
-            plt.plot(tarr,trend+season,'C0-')
-            plt.plot(tarr,y[tslice]-Ttrend,'C1-')
-            plt.plot(tarr,trend,'C2-')
+            plt.plot(ti,trend+season,'C0-')
+            plt.plot(ti,y[tslice]-Ttrend,'C1-')
+            plt.plot(ti,trend,'C2-')
 
         plt.legend(['Season','Demand-T','Trend'],
                    loc='lower right',prop={'size':9})
+        plt.ylabel('Demand (kWh)')
+        plt.xlabel('Time')
         plt.savefig('fig/seasonal_update.png')        
         plt.show()
         plt.figure(1)
         tarr=np.arange(skip+self.Ninit,i1)
         tslice=slice(skip+self.Ninit,i1)
-        plt.plot(tarr,ypred[tslice],tarr,y[tslice])
+        plt.plot(y.index[tslice],ypred[tslice],y.index[tslice],y[tslice])
         plt.legend(['Prediction','Actual'],
                    loc='lower right',prop={'size':9})
+        plt.ylabel('Demand (kWh)')
+        plt.xlabel('Time')        
         plt.savefig('fig/seasonal_err.png')
         plt.show()
         ypred=pd.Series(ypred,index=y.index)        

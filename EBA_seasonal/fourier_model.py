@@ -1,4 +1,9 @@
 #Now to do some simple Fourier Series fitting too.
+import numpy as np
+import pandas as pd
+
+pi = np.pi
+
 class fourier_model(object):
     """ Compute Fourier Series assuming annual, weekly, and daily
     oscillations.

@@ -2,6 +2,8 @@
 # hourly electricity data from the EBA dataset, from the EIA.
 # Goes with EIA_explore.ipynb.
 
+import numpy as np
+
 def remove_square_peak(Y,f,center,width):
     """remove_yearly
     Assumes there is a yearly trend.
@@ -69,7 +71,7 @@ def sinc(x):
     return s
 
 def fft_detrend(F,f,width,remove_func):
-    """detrend(dem_f,f,width,remove_func)
+    """detrend(F,f,width,remove_func)
     
     Removes mean, annual, daily and weekly trends in data
     by filtering the FFT.
@@ -85,10 +87,10 @@ def fft_detrend(F,f,width,remove_func):
     F_detrend   - detrended function.
     """ 
 
-    F_detrend=dem_f
-    F_trend_tot=np.zeros(len(dem_f))+0j
+    F_detrend=F
+    F_trend_tot=np.zeros(len(F))+0j
     #remove mean/annual oscillations
-    F_trend,F_detrend=remove_func(dem_f,f,0,width)
+    F_trend,F_detrend=remove_func(F,f,0,width)
     F_trend_tot+=F_trend
     #remove daily oscillations
     for k in [1,2]:
@@ -163,3 +165,68 @@ def remove_na(df,window=2):
     for i in ind:
         df.iloc[i]=(df.iloc[i-window]+df.iloc[i-window])/2
     return df
+
+def run_plots(df_joint):
+    """run_plots
+
+    Script function to plot trends, extract trends.
+
+    """
+    dem_t=df_joint['Demand']['2015-07':'2016-06'].copy()
+    dem_t=avg_extremes(dem_t)
+    dem_t=remove_na(dem_t)
+    dem_tv=dem_t.values
+
+    #set up FFT time/frequency scales
+    Nt = len(dem_tv)
+    #scale time to days.
+    Tmax = Nt/24
+    dt = 1/24
+    t = np.arange(0,Tmax,dt)
+    df = 1/Tmax
+    fmax=0.5/dt
+    f = np.arange(-fmax,fmax,df)
+
+    #carry out fft 
+    dem_f=np.fft.fftshift(dem_tv)
+    dem_f=np.fft.fft(dem_f)
+    dem_f=np.fft.ifftshift(dem_f)
+
+    plt.figure(figsize=(8,5))
+    spec=abs(dem_f)**2
+    spec/=sum(spec)
+    plt.semilogy(f,spec)
+    fcut=1/7
+    plt.axis([-10*fcut,10*fcut,1E-6,1])
+    plt.xlabel('Frequency (1/day)')
+    plt.ylabel('Normalized Demand Power Spectrum')
+    plt.show()
+
+    #remove the trend by assuming square peaks, with a width 4/365.
+    #Does seem like a sinc would be a better choice. Perhaps forgot some phases, because that did worse. 
+    f_trend_tot,f_detrend = fft_detrend(dem_f,f,4/365,remove_square_peak)
+    #now take a rolling average of the remainder.
+    dem_f_s=moving_avg(f_detrend,50)
+    f_trend_tot+=dem_f_s
+    f_detrend-=dem_f_s
+    plt.figure(figsize=(8,5))
+    w=1
+    plt.axis([-0.2,5,1E3,1E8])
+    plt.semilogy(f,abs(f_trend_tot),label='Estimated Trend')
+    plt.semilogy(f,abs(f_detrend),label='Detrended Spectrum')
+    plt.semilogy(f,5E4/(1+(f/w)**2),label='Estimated Background')
+    plt.show()
+
+    #check out what this detrending looks like.
+    t_trend=invert_fft(f_trend_tot)
+    t_detrend=invert_fft(f_detrend)
+
+    t_trend=pd.Series(t_trend,index=dem_t.index)
+    t_detrend=pd.Series(t_detrend,index=dem_t.index)
+
+    ti = dem_t.index
+    plt.figure(figsize=(8,5))
+    plt.plot(ti,dem_t,'b',ti,t_trend,'r',ti,t_detrend,'g')
+    #plt.axis([550,560,min(t_detrend),max(dem_t)])
+    plt.legend(['Demand','FFT Trend','Demand-Trend'])
+    plt.show()
