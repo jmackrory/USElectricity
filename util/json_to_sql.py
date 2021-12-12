@@ -7,7 +7,7 @@
 
 #Read in JSON Data.
 #Read in Electric System Bulk Operating Data
-#Export whole data frame to SQL database.   
+#Export whole data frame to SQL database.
 import pandas as pd
 import numpy as np
 import sqlalchemy
@@ -15,9 +15,9 @@ import psycopg2
 import os
 from psycopg2 import sql
 
-# #make a new table.  
+# #make a new table.
 
-#Make new database by logging into 
+#Make new database by logging into
 def create_new_database(database_name):
     """create_new_database(database_name)
 
@@ -27,7 +27,7 @@ def create_new_database(database_name):
     database_name: name of the new database.
 
     """
-    
+
     conn=psycopg2.connect(dbname='jonathan',host='localhost')
     #need elevated permissions in order to create a new database from within python, to automatically
     #commit changes.
@@ -45,7 +45,7 @@ def create_new_database(database_name):
     return None
 
 #Create fresh table in a database by dropping the old one, and putting a new blank one in.
-def create_fresh_table(database_name, table_name,init_column='name'):
+def create_fresh_table(database_name, table_name, init_column='name'):
     """create_fresh_table(database_name, table_name,init_column='name')
     Makes a new SQL table (and overwrites any existing table).
 
@@ -53,7 +53,7 @@ def create_fresh_table(database_name, table_name,init_column='name'):
     table_name:name of SQL table to create
     init_column:initial name of the column to insert
     """
-    conn=psycopg2.connect(dbname=database_name,host='localhost')
+    conn = psycopg2.connect(dbname=database_name, host='localhost')
     conn.set_session(autocommit=True)
     cur = conn.cursor()
     t1 = sql.Identifier(table_name)
@@ -80,10 +80,10 @@ def create_fresh_table(database_name, table_name,init_column='name'):
     return conn,cur
 
 #Make sure required columns are present.
-def check_and_create_columns(table_name,cur,df):
+def check_and_create_columns(table_name, cur, df):
     """check_and_create_columns(table_name,cur,df)
     Checks SQL table has columns for all of the columns
-    in a given dataframe.  
+    in a given dataframe.
 
     table_name: SQL table name
     cur: SQLalchemy cursor to the connected SQL database
@@ -101,7 +101,7 @@ def check_and_create_columns(table_name,cur,df):
         except:
             print('Trying to read from column: '+column_name+' failed.')
             print('Trying to Add column: '+column_name)
-            #if not then create that column.  
+            #if not then create that column.
             q3 = sql.SQL("ALTER TABLE {0} ADD COLUMN {1} TEXT").format(t1,c1)
             cur.execute(q3)
     return None
@@ -110,11 +110,11 @@ def check_and_create_columns(table_name,cur,df):
 #Assumes that large data files have been split using something like
 # "split -l 100 -d fname.txt split_data/fname"
 # to break initial files into smaller chunks.
-def put_data_into_sql(base_file_tag,table_name,cur,engine):
+def put_data_into_sql(base_file_tag, table_name, cur, engine):
     """put_data_int_sql(base_file_tag,table_name,cur,engine)
     Load data that has been split into small files, first into data frame.
-    Convert any series into strings to store the whole series at once.  
-    Then inject those into a SQL database.  
+    Convert any series into strings to store the whole series at once.
+    Then inject those into a SQL database.
 
     base_file_tag: tag for the split files
     table_name: SQL table to insert data into
@@ -134,27 +134,27 @@ def put_data_into_sql(base_file_tag,table_name,cur,engine):
             df=pd.read_json(path+fn,lines=True);
             #use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
             #gets confused by brackets and commas in data and childseries).
-        if 'data' in df.columns:    
+        if 'data' in df.columns:
             df['data']=df['data'].astype('str')
         ##Initially tried to protect childseries, and vertex which give connections between.
-        if 'childseries' in df.columns: 
+        if 'childseries' in df.columns:
             print('childseries in columns')
             df['childseries']=df['childseries'].astype('str')
-        if 'vertex' in df.columns:  
+        if 'vertex' in df.columns:
             print('vertex in columns')
             df['vertex']=df['vertex'].astype('str')
 
         check_and_create_columns(table_name,cur,df)
-        df.to_sql(table_name,engine,index=False,if_exists='append');        
+        df.to_sql(table_name,engine,index=False,if_exists='append');
     return None
 
 def convert_data(df):
     """convert_data(df)
     Function to convert a dataframe with rows for each series, and data as a list of lists
     into a dataframe with a common time index, and one column for each series.
-    (Other versions try 
+    (Other versions try
 
-    Input: 
+    Input:
     df: input dataframe
 
     Output
@@ -171,7 +171,7 @@ def convert_data(df):
         try:
             init_series=np.asarray(df.iloc[i]['data'])
             dat2=init_series[:,1].astype(float);
-            f = df.iloc[i]['f']        
+            f = df.iloc[i]['f']
             time_index=pd.DatetimeIndex(init_series[:,0])
             s=pd.Series(dat2,index=time_index)
             data_array.append(s)
@@ -179,13 +179,13 @@ def convert_data(df):
             data_array.append(np.nan)
             print('Skipping Series#',i)
     return data_array
-   
+
 def transpose_df(df,data_series):
     """transpose_df(df,dataseries)
     Transposes the dataframe use a time index, with name columns.
 
     df - initial dataframe with names as rows, data as long string
-    data_series - list of timeseries with 
+    data_series - list of timeseries with
 
     """
     names=df['name'].values
@@ -217,68 +217,70 @@ def transpose_all_data(base_file_tag):
     base_file_tag: tag for the split files
 
     """
-    path='data/split_data/'
-    flist=os.listdir(path)
+    path = 'data/split_data/'
+    flist = os.listdir(path)
     flist.sort()
-    df_tot=pd.DataFrame()
+    df_tot = pd.DataFrame()
     for fn in flist:
         if fn.find(base_file_tag) >= 0:
             print('Reading in :'+fn)
             #       fname_split=path+fname+str("%02d"%(i));
             #       print(fname_split)
-            df=pd.read_json(path+fn,lines=True);
+            df = pd.read_json(path+fn,lines=True);
             #use str() to protect with quotes, to just store the whole string in SQL, (which otherwise
             #gets confused by brackets and commas in data and childseries).
             if ('data' in df.columns):
                 series1 = convert_data(df)
-                df2=transpose_df(df,series1)
-                df2=df2.dropna(axis=1,how='all')
+                df2 = transpose_df(df,series1)
+                df2 = df2.dropna(axis=1,how='all')
                 if (len(df2)>0):
                     df_tot=df_tot.join(df2,how='outer')
     return df_tot
 
 def transpose_df(df,data_series):
     """transpose_df(df,dataseries)
-    Transposes a dataframe with many time series to use a common time index, with columns 
+    Transposes a dataframe with many time series to use a common time index, with columns
     given by the names.
 
     """
-    names=df['name'].values
-    Tindex=data_series[0].index
-    df_new=pd.DataFrame(columns=names,index=Tindex)
+    names = df['name'].values
+    Tindex = data_series[0].index
+    df_new = pd.DataFrame(columns=names,index=Tindex)
 
     for i in range(len(df)):
-        name=names[i]
-        df_new[name]=data_series[i]
+        name = names[i]
+        df_new[name] = data_series[i]
     return df_new
 
-#Regular EBA into SQL table.
-# # #Borrowed from Introducing Python pg 180.
-# database_name='US_ELEC'
-# fname='EBA'
-# table_name=fname
-# engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
+if __name__ == '__main__':
 
-# #Make brand-new databases.  
-# create_new_database(database_name)
-# #Make new table NB: Erases old table!
-# conn,cur=create_fresh_table(database_name,table_name)
-# put_data_into_sql(fname,table_name,cur,engine)
+    #Regular EBA into SQL table.
+    # # #Borrowed from Introducing Python pg 180.
+    # database_name='US_ELEC'
+    # fname='EBA'
+    # table_name=fname
+    # engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
 
-# #Borrowed from Introducing Python pg 180.
-database_name='US_ELEC'
-fname='EBA'
-table_name='EBA_time'
-engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
+    # #Make brand-new databases.
+    # create_new_database(database_name)
+    # #Make new table NB: Erases old table!
+    # conn,cur=create_fresh_table(database_name,table_name)
+    # put_data_into_sql(fname,table_name,cur,engine)
 
-#Make new table NB: Erases old table!
-conn,cur=create_fresh_table(database_name,table_name)
-#df_tot=transpose_all_data('EBA')
-df_small=df_tot.iloc[0:100,0:5]
-colfixed=collist.str.replace("\(region\)","- region")
-df_small.columns=colfixed
-check_and_create_columns(table_name,cur,df_small)
-df_small.to_sql(table_name,engine,if_exists='replace');        
+    # #Borrowed from Introducing Python pg 180.
+    database_name='US_ELEC'
+    fname='EBA'
+    table_name='EBA_time'
+    engine=sqlalchemy.create_engine("postgresql+psycopg2://localhost/"+database_name)
+
+    #Make new table NB: Erases old table!
+    conn,cur=create_fresh_table(database_name,table_name)
+    #df_tot=transpose_all_data('EBA')
+    df_small=df_tot.iloc[0:100,0:5]
+    colfixed=collist.str.replace("\(region\)","- region")
+    df_small.columns=colfixed
+    check_and_create_columns(table_name,cur,df_small)
+    df_small.to_sql(table_name,engine,if_exists='replace');
 
 # def put_time_df_to_sql(df,table_name,engine):
-#     df.to_sql(table_name,engine,index=False,if_exists='replace');        
+#     df.to_sql(table_name,engine,index=False,if_exists='replace');

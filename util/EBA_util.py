@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import adfuller, acf, pacf, arma_order_select_ic
 
+
 def avg_extremes(df,window=2):
     """avg_extremes(df)
     Replace extreme outliers, or zero values with the average on either side.
@@ -31,6 +32,7 @@ def avg_extremes(df,window=2):
 
     return df
 
+
 def remove_na(df,window=2):
     """remove_na(df)
     Replace all NA values with the mean value of the series.
@@ -45,10 +47,11 @@ def remove_na(df,window=2):
     df.loc[na_msk]=df.mean()
 
     ind= np.arange(len(df))[na_msk]
-    #for isolated values, replace by the average on either side.    
+    #for isolated values, replace by the average on either side.
     for i in ind:
         df.iloc[i]=(df.iloc[i-window]+df.iloc[i-window])/2
     return df
+
 
 def make_seasonal_plots(dem,temp,per,nlags):
     """Make seasonal decomposition of temperature, and demand curves.
@@ -108,6 +111,7 @@ def make_seasonal_plots(dem,temp,per,nlags):
 
     return None
 
+
 def plot_acf(ts,ls,line_label,ax1,ax2,nl=50):
     """plot_acf(ts,ls,line_label,ax1,ax2,nl)
     Plot the auto-correlation plots for a timeseries (ts) up to a given number of lags (nl)
@@ -131,12 +135,12 @@ def plot_acf(ts,ls,line_label,ax1,ax2,nl=50):
     ax1.set_xlabel('Lag')
     ax1.set_ylabel('Auto Correlation',labelpad=2)
     ax1.plot(lag_acf,ls,label=line_label)
-    
+
     ax2.axhline(y=sd,color='gray')
     ax2.axhline(y=-sd,color='gray')
     ax2.set_xlabel('Lag')
-    ax2.set_ylabel('Partial Auto Correlation',labelpad=2)    
-    ax2.plot(lag_pacf,ls,label=line_label)    
+    ax2.set_ylabel('Partial Auto Correlation',labelpad=2)
+    ax2.plot(lag_pacf,ls,label=line_label)
     return None
 
 
@@ -146,18 +150,18 @@ def remove_square_peak(Y,f,center,width):
     Assumes there is a yearly trend.
     Subtracts off everything on a monthly or longer timescale. (around 1/30)
     Replaces that with the average of the neighbouring points.
-    
+
     inputs:
     Y - initial centered Fourier transform
     f - list of frequencies Fourier transform is evaluated a
-    shape - function to use to define the window.  Takes a position input, and width. 
-    center - frequency to center filter at, to remove        
+    shape - function to use to define the window.  Takes a position input, and width.
+    center - frequency to center filter at, to remove
     width - width of the filter.
 
     return:
-    detrended -transform after subtracting off this component.  
+    detrended -transform after subtracting off this component.
     trend     -the subtracted portion.
-    """ 
+    """
     #find stuff within +/- 1 width
     trend_msk= abs(f-center)<width
     #find stuff within +/- 1.5 widths, and not inside 1 ith
@@ -171,24 +175,25 @@ def remove_square_peak(Y,f,center,width):
     detrend = Y-trend
     return trend, detrend
 
+
 def remove_sinc_peak(Y,f,center,width):
     """remove_sinc_peak
     Assumes there is a peak described by a sinc (fro mthe truncated FFT)
     Tries to set the peak height based on the value of the FFT at the peaks
-    Subtracts off a sinc function with that amplitude. 
+    Subtracts off a sinc function with that amplitude.
     Replaces that with the average of the neighbouring points.
-    
+
     inputs:
     Y - initial centered Fourier transform
     f - list of frequencies Fourier transform is evaluated a
-    shape - function to use to define the window.  Takes a position input, and width. 
-    center - frequency to center filter at, to remove        
+    shape - function to use to define the window.  Takes a position input, and width.
+    center - frequency to center filter at, to remove
     width - width of the filter.
 
     return:
-    detrended -transform after subtracting off this component.  
+    detrended -transform after subtracting off this component.
     trend     -the subtracted portion.
-    """ 
+    """
     #find stuff within +/- 1 width
     trend_msk= abs(f-center)<width
     #find stuff within +/- 1.5 widths, and not inside 1 ith
@@ -209,7 +214,7 @@ def sinc(x):
 
 def fft_detrend(F,f,width,remove_func):
     """detrend(dem_f,f,width,remove_func)
-    
+
     Removes mean, annual, daily and weekly trends in data
     by filtering the FFT.
 
@@ -222,7 +227,7 @@ def fft_detrend(F,f,width,remove_func):
     return:
     F_trend_tot - total trend removed
     F_detrend   - detrended function.
-    """ 
+    """
 
     F_detrend=dem_f
     F_trend_tot=np.zeros(len(dem_f))+0j
@@ -256,7 +261,7 @@ def moving_avg(Y,width):
     Ycum = np.cumsum(Y)
     Ysmooth=np.zeros(len(Y))+0j
     Ysmooth[width:-width]=(Ycum[2*width:]-Ycum[:-2*width])/(2*width)
-    return Ysmooth    
+    return Ysmooth
 
 def invert_fft(Y):
     """invert_fft(Y)
@@ -274,16 +279,16 @@ def invert_fft(Y):
 def plot_pred(series_list,label_list):
     """make plot to compare fitted parameters"""
     for s,l in zip(series_list,label_list):
-        plt.plot(s,label=l)    
+        plt.plot(s,label=l)
     plt.legend()
     plt.show()
 
 def rmse(x,y):
+    """Root Mean Squre Error"""
     z = np.sqrt(np.sum((x-y)*(x-y))/len(x))
     return z
 
 def mape(x,y):
+    """Mean Absolute Percentage Error"""
     z = np.mean(np.abs((1-x/y)))
-    return z    
-
-
+    return z
