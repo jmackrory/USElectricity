@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: testelec
+    ports:
+      5432:5432
+    volumes: 
+      ${PWD}/postgres-docker:/var/lib/postgresql/data       
+
+  mongo:
+    image: mongo
+    ports: 
+
+  tfjupyter:
+    build: 
+      dockerfile: ./Dockerfile.tfjupyter
+      context: .
+    volumes: ..
+

@@ -1,0 +1,10 @@
+FROM tensorflow/tensorflow:2.11.0-gpu-jupyter
+
+USER root
+# postgres
+EXPOSE 5432
+# mongo
+EXPOSE 7000 
+
+RUN sudo apt-get update && \
+sudo apt-get install 
