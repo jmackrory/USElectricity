@@ -1,0 +1,26 @@
+FROM tensorflow/tensorflow:2.11.0-gpu-jupyter
+
+RUN echo whoami
+#USER root
+# postgres
+EXPOSE 5432
+# mongo
+EXPOSE 27017 
+# jupyter
+EXPOSE 8888
+
+# probably non necessary given decent environment.
+# RUN apt-get update && \
+#     apt-get install \
+#     wget \
+#     ipython \
+#     pip
+
+
+# RUN cp docker/requirements.txt ./
+# RUN pip install -r requirements.txt
+
+RUN mkdir /home/us_elec
+RUN cd /home/us_elec
+
+CMD ["/bin/bash"]

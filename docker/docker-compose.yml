@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - 6543:5432
+    volumes: 
+      - ../docker-data/postgres-docker:/var/lib/postgresql/data       
+
+  mongo:
+    image: mongo
+    ports: 
+      - 27017:27017 
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+    volumes:
+      - ../docker-data/mongo-docker:/data/db
+
+  tfjupyter:
+    depends_on:
+      - postgres
+      - mongo
+    build: 
+      dockerfile: ./docker/Dockerfile.tfjupyter
+      context: ../
+    user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
+    volumes: 
+      - ../US-Electricity:/home/tf-user/US-Electricity
+    ports:
+      - 6543:5432
+      - 27017:27017
+      - 8888:8888
+    networks:
+      - docker_net
+
+networks:
+  docker_net:
+
