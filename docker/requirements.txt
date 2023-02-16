@@ -1,2 +1,4 @@
 pandas
-pyspark
+matplotlib
+sqlalchemy
+jupyterlab

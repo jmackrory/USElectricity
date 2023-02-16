@@ -12,6 +12,25 @@ run container:
 "docker compose -f docker/docker-compose.yml run tfjupyter"
 - should have whole project folder mounted to dir.
 
+shut it all down
+"docker compose -f docker/docker-compose.yml down"
+
+## Feb 14
+
+Got jupyter running inside container with new command. 
+Having issues accessing outside the container?  
+Running like this:
+"docker compose -f docker/docker-compose.yml run --service-ports tfjupyter"
+hits issues?
+
+Using command 
+["/usr/local/bin/jupyter-lab", 
+      "--ip", "0.0.0.0",
+      "--port", "8888",
+      "--no-browser",
+      "--allow-root"]
+is not working?  port doesn't seem to be there on host machine?
+
 ## Feb 11, 2022
 - migrated uid/gid in docker-compose to use .env file.
 - successfully got docker-compose to work for building TF, Postgres
@@ -21,6 +40,7 @@ Todo:
     - interact with mongo
     - get jupyter going
     - test tensorflow
+    - move 
 
 
 ## Feb 2022 - Docker

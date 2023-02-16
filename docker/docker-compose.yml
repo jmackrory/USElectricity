@@ -28,14 +28,28 @@ services:
       context: ../
     user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
     volumes: 
-      - ../US-Electricity:/home/tf-user/US-Electricity
+      - ../:/home/us_elec
+    stdin_open: true
+    tty: true      
     ports:
-      - 6543:5432
-      - 27017:27017
       - 8888:8888
     networks:
       - docker_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: ["/usr/local/bin/jupyter-lab", 
+     "--ip", "0.0.0.0",
+     "--port", "8888",
+     "--no-browser",
+     "--allow-root",
+     "--notebook-dir", "/home/us_elec"]
 
 networks:
   docker_net:
+
 
