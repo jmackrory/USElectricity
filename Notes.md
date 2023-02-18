@@ -6,14 +6,19 @@
 ## Running Docker setup
 - change dir to root of project
 build container:
-"docker compose -f docker/docker-compose.yml build tfjupyter"
+"docker compose -f docker/docker-compose.yml build"
 
 run container:
-"docker compose -f docker/docker-compose.yml run tfjupyter"
+"docker compose -f docker/docker-compose.yml up"
 - should have whole project folder mounted to dir.
 
 shut it all down
 "docker compose -f docker/docker-compose.yml down"
+
+## Feb 15
+Tried FastAPI container to try debugging what was up with networking.
+Note that you need to use "up" not "run" to bring up the machine and networks
+and actually run it.  
 
 ## Feb 14
 
