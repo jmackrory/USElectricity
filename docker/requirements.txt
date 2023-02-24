@@ -1,4 +1,6 @@
 pandas
 matplotlib
+scikit-learn
+statsmodels
 sqlalchemy
 jupyterlab

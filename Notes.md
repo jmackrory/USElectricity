@@ -15,6 +15,10 @@ run container:
 shut it all down
 "docker compose -f docker/docker-compose.yml down"
 
+## Feb 23
+- Got it to work by just mounting files into /tf directory.  Can create files and edit them now. 
+- Can run JupyterLab?  Not sure it's worth the hassle if we can just use VSCode (which is far more comfortable for editting)
+
 ## Feb 15
 Tried FastAPI container to try debugging what was up with networking.
 Note that you need to use "up" not "run" to bring up the machine and networks

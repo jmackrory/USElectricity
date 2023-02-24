@@ -9,28 +9,32 @@ services:
     volumes: 
       - ../../docker_data/postgres-docker:/var/lib/postgresql/data       
 
-  mongo:
-    image: mongo
-    ports: 
-      - 27017:27017 
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
-    volumes:
-      - ../../docker_data/mongo-docker:/data/db
+  #mongo:
+  #  image: mongo
+  #  ports: 
+  #    - 27017:27017 
+  #  environment:
+  #    - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+  #    - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+  #  volumes:
+  #    - ../../docker_data/mongo-docker:/data/db
 
   tfjupyter:
     depends_on:
       - postgres
-      - mongo
+      #- mongo
     build: 
       dockerfile: ./docker/Dockerfile.tfjupyter
       context: ../
-    user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
+    #user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
     volumes: 
-      - ../:/home/us_elec
-    stdin_open: true
-    tty: true      
+      - ../data:/tf/us_elec/data
+      - ../notebooks:/tf/us_elec/notebooks
+      - ../markdown:/tf/us_elec/markdown
+      - ../code:/tf/us_elec/code
+      - ../.jupyter:/tf/.jupyter
+    #stdin_open: true
+    #tty: true      
     ports:
       - 8888:8888
     networks:
@@ -47,7 +51,7 @@ services:
      "--port", "8888",
      "--no-browser",
      "--allow-root",
-     "--notebook-dir", "/home/us_elec"]
+     "--notebook-dir", "/tf"]
 
 networks:
   docker_net:
