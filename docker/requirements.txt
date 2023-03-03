@@ -3,4 +3,9 @@ matplotlib
 scikit-learn
 statsmodels
 sqlalchemy
-jupyterlab
+geos
+shapely
+pyshp==2.3.1
+cartopy==0.21.1
+tqdm==4.64.1
+psycopg2

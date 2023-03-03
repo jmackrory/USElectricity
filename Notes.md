@@ -6,23 +6,42 @@
 ## Running Docker setup
 - change dir to root of project
 build container:
-"docker compose -f docker/docker-compose.yml build"
+`docker compose -f docker/docker-compose.yml build`
 
 run container:
-"docker compose -f docker/docker-compose.yml up"
+`docker compose -f docker/docker-compose.yml up`
 - should have whole project folder mounted to dir.
 
 shut it all down
 "docker compose -f docker/docker-compose.yml down"
 
+# Mar 2
+- Running into issues trying to login to local jupyter server.  This is true with docker, but also when just trying to run
+Jupyter in local linux environment.
+- might need https going?
+Managed to get a local jupyter server going that VSCode would listen and work with.  Hard to make it forget about those.
+- use `ctrl + shift + p`: Jupyter - Clear Jupyter Remote Server List to forget connections
+
+- After forgetting previous bad attempts, could make a new connection matching the Docker container at http://localhost:8890 and enter password.
+Labelled the connection as TFJupyter.
+Note: Need to change the kernel to the notebooks Kernel, otherwise it would just operate in the local linux env, rather than the DOcker container's kernel.  (Can verify by running `!hostname`)
+
+- Can also change the output in VSCode to be from specific plugins (e.g. Jupyter) in the terminal.  
+
+## Feb 26
+Added password (to avoid unique token nonsense) to serve results.  Adjusted to mount local .jupyter file.
+May have to give up an just use Emacs for Jupyter again since VSCode for linux is sub-par on support.
+
 ## Feb 23
 - Got it to work by just mounting files into /tf directory.  Can create files and edit them now. 
 - Can run JupyterLab?  Not sure it's worth the hassle if we can just use VSCode (which is far more comfortable for editting)
+- I think VSCode will prove annoying while trying to attach to Jupyter running inside a Docker container.
 
 ## Feb 15
 Tried FastAPI container to try debugging what was up with networking.
+
 Note that you need to use "up" not "run" to bring up the machine and networks
-and actually run it.  
+and actually run the whole server
 
 ## Feb 14
 

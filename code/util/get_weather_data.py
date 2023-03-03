@@ -120,7 +120,7 @@ def read_isd_df():
     """
 
     #now compare with stations from ISD database.
-    isd_name_df = pd.read_fwf('data/ISD/isd-history.txt',skiprows=20)
+    isd_name_df = pd.read_fwf('../data/ISD/isd-history.txt',skiprows=20)
     #also only keep airports still operational in time period.
     msk = isd_name_df['END'] > 20150000
     isd_name_df = isd_name_df[msk]
@@ -252,7 +252,7 @@ def isd_filename(yearstr, USAF, WBAN):
 
 
 def get_local_isd_path(yearstr, usaf, wban):
-    return "data/ISD/{1}-{2:0>5}-{0}.gz".format(yearstr,str(usaf),str(wban))
+    return "../data/ISD/{1}-{2:0>5}-{0}.gz".format(yearstr,str(usaf),str(wban))
 
 
 #download weather data for all of the airports specified in aircode
@@ -367,7 +367,7 @@ def convert_state_isd(air_df, ST):
     one big data frame.
     """
     data_dir = 'data/ISD/'
-    Tindex = pd.DatetimeIndex(start='2015-07', end='2017-11', freq='h')
+    Tindex = pd.date_range(start='2015-07', end='2017-11', freq='h')
     df_tot = pd.DataFrame(index=Tindex)
     #select out only the entries for the desired state.
     msk = air_df['ST'] == ST
@@ -381,7 +381,7 @@ def convert_state_isd(air_df, ST):
             state = ap['ST']
             file_name = get_local_isd_path(yearstr, usaf, wban)
             df = convert_isd_to_df(file_name, city, state)
-            df_tot = df_tot.append(df)
+            df_tot = pd.concat([df_tot, df])
         print('done with {}'.format(ap['name']))
     return df_tot
 
@@ -404,7 +404,7 @@ def convert_all_isd(air_df):
             state = ap['State']
             file_name = get_local_isd_path(yearstr, str(usaf), str(wban))
             df = convert_isd_to_df(file_name, city, state)
-            df_tot = df_tot.append(df)
+            df_tot = pd.concat([df_tot,df])
         print('done with {}'.format(ap['Name']))
     return df_tot
 
@@ -426,10 +426,10 @@ def convert_all_isd(air_df):
 if __name__=='__main__':
 
     try:
-        air_df = pd.read_csv('data/air_code_df.gz')
+        air_df = pd.read_csv('../data/air_code_df.gz')
     except:
         airport_codes = make_airport_df()
         isd_names = read_isd_df()
         air_df = merge_air_isd(airport_codes,isd_names)
         #write output to csv
-        air_df.to_csv('data/air_code_df.gz',compression='gzip',header=True)
+        air_df.to_csv('../data/air_code_df.gz',compression='gzip',header=True)

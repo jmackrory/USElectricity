@@ -4,27 +4,28 @@ FROM tensorflow/tensorflow:2.11.0-gpu-jupyter
 # postgres
 EXPOSE 5432
 # mongo
-EXPOSE 27017 
+EXPOSE 27017
 # jupyter
 EXPOSE 8888
 
-# probably non necessary given decent environment.
-#RUN apt-get update && \
-#    apt-get install \
-#    flake
+
+RUN apt-get update && \
+    apt-get install \
+    libgeos++-dev -y
 
 #RUN /usr/bin/python3 -m pip install --upgrade pip
-
-#RUN mkdir /home/us_elec
-RUN mkdir /tf/data
-RUN mkdir /tf/notebooks
-RUN mkdir /tf/code
-RUN cd /home/
 
 COPY docker/requirements.txt /home/requirements.txt
 RUN pip install -r /home/requirements.txt
 
+#RUN export JUPYTER_CONFIG_DIR /tf/.jupyter
+
 RUN cd /tf
 
-CMD ["/bin/bash"]
-#CMD ["/usr/local/bin/jupyter-lab", "--ip", "0.0.0.0", "--port", "8888", "--no-browser"]
+CMD ["/usr/local/bin/jupyter", \
+    "notebook", \
+    "--ip", "0.0.0.0", \
+    "--port", "8888", \
+    "--no-browser",  "--allow-root", \
+    "--NotebookApp.allow_origin='*'", \
+    "--notebook-dir", "/tf"]
