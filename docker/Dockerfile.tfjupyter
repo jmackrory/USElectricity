@@ -18,12 +18,14 @@ RUN apt-get update && \
 
 # Install ECCode from Source for reading Grib forecast files
 RUN mkdir /home/eccode
-RUN cd /home/eccode
-RUN wget https://confluence.ecmwf.int/download/attachments/45757960/eccodes-2.28.0-Source.tar.gz
+WORKDIR /home/eccode
+#RUN wget https://confluence.ecmwf.int/download/attachments/45757960/eccodes-2.28.0-Source.tar.gz
+COPY docker/files/eccodes-2.28.0-Source.tar.gz /home/eccode/eccodes-2.28.0-Source.tar.gz
 RUN tar -xzvf eccodes-2.28.0-Source.tar.gz
 
-RUN mkdir build
-RUN cd build
+RUN mkdir /home/eccode/build
+WORKDIR /home/eccode/build
+RUN pwd
 
 RUN cmake -DCMAKE_INSTALL_PREFIX=/usr/local ../eccodes-2.28.0-Source
 RUN make
@@ -41,7 +43,7 @@ RUN export JUPYTER_CONFIG_DIR=/tf/.jupyter
 RUN export PYTHON_PATH="$PYTHON_PATH:/tf"
 
 RUN mkdir /tf/us_elec
-RUN cd /tf
+WORKDIR /tf
 
 CMD ["/usr/local/bin/jupyter", \
      "notebook", \
