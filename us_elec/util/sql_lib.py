@@ -18,7 +18,7 @@ import psycopg2
 import psycopg2.sql as sql
 import pandas as pd
 
-#Make new database by logging into 
+#Make new database by logging into
 def create_new_database(database_name):
 	conn=psycopg2.connect(dbname='jonathan',host='localhost')
 	#need elevated permissions in order to create a new database from within python, to automatically
@@ -37,16 +37,16 @@ def create_new_database(database_name):
 	return None
 
 #make new connection and cursor for direct connection to SQL database via psycopg
-def create_conn_and_cur(database_name,table_name):
-	conn=psycopg2.connect(dbname=database_name,host='localhost')
+def create_conn_and_cur(database_name, table_name):
+	conn=psycopg2.connect(dbname=database_name, host='localhost')
 	conn.set_session(autocommit=True)
 	cur = conn.cursor()
 	return conn, cur
 
 
 #Create fresh table in a database by dropping the old one, and putting a new blank one in.
-def create_fresh_table(database_name, table_name,init_column='init'):
-	conn=psycopg2.connect(dbname=database_name,host='localhost')
+def create_fresh_table(database_name, table_name, init_column='init'):
+	conn=psycopg2.connect(dbname=database_name, host='localhost')
 	conn.set_session(autocommit=True)
 	cur = conn.cursor()
 	t1 = sql.Identifier(table_name)
@@ -87,7 +87,7 @@ def check_and_create_columns(table_name,cur,df):
 		except:
 			print('Trying to read from column: '+column_name+' failed.')
 			print('Trying to Add column: '+column_name)
-			#if not then create that column.  
+			#if not then create that column.
 			q3 = sql.SQL("ALTER TABLE {0} ADD COLUMN {1} TEXT").format(t1,c1)
 			cur.execute(q3)
 	return None
@@ -103,9 +103,9 @@ def safe_sql_query(table_name, out_columns, match_names, freq):
     table_name - name for table
     out_columns - list of desired columns
     match_names - desired patterns that the name must match.  (All joined via AND)
-    freq   - desired frequency     
+    freq   - desired frequency
 
-    Return: 
+    Return:
     sql query to carry out desired command.
     """
 
@@ -116,7 +116,7 @@ def safe_sql_query(table_name, out_columns, match_names, freq):
         namelist.append(sql.Literal('%'+namevar+'%'))
         #join together these matches with ANDs to match them all
         name_query=sql.SQL(' AND name LIKE ').join(namelist)
-    #Total SQL query to select desired columns with features 
+    #Total SQL query to select desired columns with features
     q1 = sql.SQL("SELECT {0} FROM {1} WHERE (name LIKE {2} AND f LIKE {3}) ").format(
         col_query,
         sql.Identifier(table_name),
@@ -129,19 +129,19 @@ def get_column_query(table_name, out_column):
     Return SQL query to extract 'out_column' from 'table_name'
     """
     #make up categories to match the name by.
-    #Total SQL query to select desired columns with features 
+    #Total SQL query to select desired columns with features
     q1 = sql.SQL("SELECT {0} FROM {1}").format(
         sql.Identifier(out_column),
         sql.Identifier(table_name))
     return(q1)
 
 #Get a dataframe from SQL database for given psycopg2 cursor,
-#with desired output columns.     
+#with desired output columns.
 #Must select data based on series type, state, and type of generation.
 def get_dataframe(cur, table_name, out_columns, match_names, freq):
     """get_dataframe(cur, table_name, out_columns, match_names, freq)
-    Generate pandas dataframe from calling SQL database. 
-    Dataframe will contain 'out_columns', in cases where the names 
+    Generate pandas dataframe from calling SQL database.
+    Dataframe will contain 'out_columns', in cases where the names
     contain all of the entries in 'match_names'
 
     Input: cur - psycopg2 cursor connected to database
@@ -153,11 +153,9 @@ def get_dataframe(cur, table_name, out_columns, match_names, freq):
     Output:
     df  - pandas Dataframe
     """
-    
-    q = safe_sql_query(table_name,out_columns,match_names,freq)
-    cur.execute(q);
-    df0=cur.fetchall();
-    df = pd.DataFrame(df0,columns=out_columns);
-    return df
-   
 
+    q = safe_sql_query(table_name, out_columns, match_names, freq)
+    cur.execute(q);
+    df0 = cur.fetchall();
+    df = pd.DataFrame(df0, columns=out_columns);
+    return df

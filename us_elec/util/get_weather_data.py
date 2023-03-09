@@ -3,6 +3,8 @@
 from time import sleep
 from ftplib import FTP
 import os
+import requests
+import urllib
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -75,6 +77,14 @@ region_dict={
     'WI':'Midwest',
     'WY':'Northwest'}
 
+DATA_PATH = '/tf/data'
+AIR_CSV = os.path.join(DATA_PATH, 'airports.csv')
+ISD_HISTORY = os.path.join(DATA_PATH, 'ISD/isd-history.txt')
+
+START_YR_MONTH = '2015-07'
+END_YR_MONTH = '2023-03'
+START_YR = 2015
+END_YR = 2023
 
 def make_airport_df():
      """make_airport_df
@@ -82,7 +92,7 @@ def make_airport_df():
      Restrict then to large and medium airports across the US.
      """
      #read in list of airports
-     airport_df = pd.read_csv('data/airports.csv')
+     airport_df = pd.read_csv(AIR_CSV)
      #only keep US airports, and name,city, and ICAO codes
      msk2 = ((airport_df['iso_country'] == 'US') &
              airport_df['type'].apply(lambda x: x in ['large_airport', 'medium_airport']))
@@ -120,7 +130,7 @@ def read_isd_df():
     """
 
     #now compare with stations from ISD database.
-    isd_name_df = pd.read_fwf('../data/ISD/isd-history.txt',skiprows=20)
+    isd_name_df = pd.read_fwf(ISD_HISTORY,skiprows=20)
     #also only keep airports still operational in time period.
     msk = isd_name_df['END'] > 20150000
     isd_name_df = isd_name_df[msk]
@@ -212,6 +222,7 @@ def get_noaa_ftp_conn():
 def close_ftp_conn(ftp):
     ftp.quit()
 
+
 #now download the data from NOAA:
 def ftp_download_data(ftp, USAF, WBAN, yearstr, city, airport):
     """ftp_download_data(USAF,WBAN,yearstr,city,airport)
@@ -243,7 +254,7 @@ def ftp_download_data(ftp, USAF, WBAN, yearstr, city, airport):
 
 
 def isd_filename(yearstr, USAF, WBAN):
-    """ isd_filename(yearstr,USAF,WBAN)
+    """ isd_filename(yearstr, USAF, WBAN)
     Make filename corresponding to zipped file names used in ISD database.
     """
     #put in some padding {:0>5} for shorter codes.
@@ -252,11 +263,11 @@ def isd_filename(yearstr, USAF, WBAN):
 
 
 def get_local_isd_path(yearstr, usaf, wban):
-    return "../data/ISD/{1}-{2:0>5}-{0}.gz".format(yearstr,str(usaf),str(wban))
+    return os.path.join(DATA_PATH, 'ISD', isd_filename(yearstr, usaf, wban))
 
 
 #download weather data for all of the airports specified in aircode
-def get_all_data(aircode, start_year=2015, end_year=2020):
+def get_all_data_ftp(aircode, start_year=2015, end_year=2020):
     """get_all_data(aircode, years=['2015', '2016', '2017'])
     Download the data for all airports we could find weather stations for in desired cities.
 
@@ -280,7 +291,7 @@ def get_all_data(aircode, start_year=2015, end_year=2020):
     return None
 
 
-def get_missing_data(aircode, start_year=2015, end_year=2020):
+def get_missing_data_ftp(aircode, start_year=2015, end_year=2020):
     """get_all_data(aircode, years=['2015', '2016', '2017'])
     Download the data for all airports we could find weather stations for in desired cities.
 
@@ -307,6 +318,81 @@ def get_missing_data(aircode, start_year=2015, end_year=2020):
                 found_count +=1
     close_ftp_conn(ftp)
     print(found_count)
+    return None
+
+
+def get_http_isd_url(yearstr, USAF, WBAN):
+    fn = isd_filename(yearstr, USAF, WBAN)
+    url = f'https://www.ncei.noaa.gov/pub/data/noaa/isd-lite/{yearstr}/{fn}'
+    return url
+
+
+#now download the data from NOAA:
+def http_download_data(USAF, WBAN, yearstr, city, airport):
+    """http_download_data(USAF,WBAN,yearstr,city,airport)
+    Download automated weather station data from NOAA for a given year at a given airport.
+
+    USAF: USAF 6 digit code for airport.
+    WBAN: NOAA code for weather station at airport
+    yearstr: a string containing the 4 digit year.
+    city: city the airport is located in
+    airport: Name of the airport.
+    """
+
+    local_filepath = get_local_isd_path(yearstr, USAF, WBAN)
+    url = get_http_isd_url(yearstr, USAF, WBAN)
+    # with open(local_filepath, 'wb') as fp:
+    #     download_chunked_file(url, fp)
+    req = urllib.request.Request(url)
+
+    try:
+        #ftp.retrbinary(f'RETR {file_name}', fp.write)
+        response = urllib.request.urlopen(req)
+        with open(local_filepath, 'wb') as f:
+            f.write(response.read())
+
+    except Exception as e:
+        print(f"Couldn't find info for {city} {airport} {local_filepath}")
+
+
+    return local_filepath
+
+# def download_chunked_file(url:str, fp):
+#     """Taken from answer in:
+#     https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
+#     For large files
+#     """
+#     # NOTE the stream=True parameter below
+
+#     with requests.get(url, stream=True) as r:
+#         r.raise_for_status()
+#         for chunk in r.iter_content(chunk_size=8192):
+#             # If you have chunk encoded response uncomment if
+#             # and set chunk_size parameter to None.
+#             #if chunk:
+#             fp.write(chunk)
+#     return None
+
+
+#download weather data for all of the airports specified in aircode
+def get_all_data_http(aircode, start_year=2015, end_year=2020):
+    """get_all_data_http (aircode, years=['2015', '2016', '2017'])
+    Download the data for all airports we could find weather stations for in desired cities.
+
+    aircode: datafram containing airport codes, NOAA station numbers, airports
+    years: array of strings for the years to seek data.
+    """
+    Nc = len(aircode)
+    for year in range(start_year, end_year):
+        yearstr = str(year)
+        for i in tqdm(range(len(aircode))):
+            ap = aircode.iloc[i]
+            usaf = ap['USAF']
+            wban = ap['WBAN']
+            city = ap['City']
+            airport = ap['name']
+            http_download_data(usaf, wban, str(year), city, airport)
+            sleep(0.01)
     return None
 
 
@@ -367,13 +453,14 @@ def convert_state_isd(air_df, ST):
     one big data frame.
     """
     data_dir = 'data/ISD/'
-    Tindex = pd.date_range(start='2015-07', end='2017-11', freq='h')
+    Tindex = pd.date_range(start=START_YR_MONTH, end=END_YR_MONTH, freq='h')
     df_tot = pd.DataFrame(index=Tindex)
     #select out only the entries for the desired state.
     msk = air_df['ST'] == ST
     air_msk = air_df[msk]
     for i in range(len(air_msk)):
-        for yearstr in ['2015','2016','2017']:
+        for year in range(START_YR, END_YR):
+            yearstr = str(year)
             ap = air_msk.iloc[i]
             usaf = ap['USAF']
             wban = ap['WBAN']
@@ -392,11 +479,12 @@ def convert_all_isd(air_df):
     one big data frame.
     """
     data_dir = 'data/ISD/'
-    Tindex = pd.DatetimeIndex(start='2015-07',end='2017-11',freq='h')
+    Tindex = pd.DatetimeIndex(start=START_YR_MONTH,end=END_YR_MONTH,freq='h')
     df_tot = pd.DataFrame(index=Tindex)
     nmax = len(air_df)
     for i in range(nmax):
-        for yearstr in ['2015','2016','2017']:
+        for yearstr in range(START_YR, END_YR):
+            yearstr=year
             ap = air_df.iloc[i]
             usaf = ap['USAF']
             wban = ap['WBAN']
@@ -408,25 +496,12 @@ def convert_all_isd(air_df):
         print('done with {}'.format(ap['Name']))
     return df_tot
 
-# def make_weather_multiindex(air_df):
-#     #Tindex=pd.DatetimeIndex(start='2015-07',end='2017-11',freq='h')
-#     Tindex=pd.DatetimeIndex(start='2015-07',end='2016-03',freq='m')
-#     city_list=list()
-#     nmax=4;#len(air_df)
-#     for i in range(nmax):
-#         ap = air_df.iloc[i]
-#         city=ap['City']
-#         state=ap['State']
-#         city_ST=city+', '+state
-#         city_list.append(city_ST)
-#     joint_index=pd.MultiIndex.from_product([Tindex,city_list])
-#     return joint_index
 
 #make dataframes with codes.
 if __name__=='__main__':
 
     try:
-        air_df = pd.read_csv('../data/air_code_df.gz')
+        air_df = pd.read_csv('tf/data/air_code_df.gz')
     except:
         airport_codes = make_airport_df()
         isd_names = read_isd_df()

@@ -6,13 +6,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - 6543:5432
-    volumes: 
-      - ../../docker_data/postgres-docker:/var/lib/postgresql/data       
+    volumes:
+      - ../../docker_data/postgres-docker:/var/lib/postgresql/data
 
   #mongo:
   #  image: mongo
-  #  ports: 
-  #    - 27017:27017 
+  #  ports:
+  #    - 27017:27017
   #  environment:
   #    - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
   #    - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
@@ -23,18 +23,18 @@ services:
     depends_on:
       - postgres
       #- mongo
-    build: 
+    build:
       dockerfile: ./docker/Dockerfile.tfjupyter
       context: ../
     #user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
-    volumes: 
-      - ../data:/tf/us_elec/data
-      - ../notebooks:/tf/us_elec/notebooks
-      - ../markdown:/tf/us_elec/markdown
-      - ../code:/tf/us_elec/code
+    volumes:
+      - ../data:/tf/data
+      - ../notebooks:/tf/notebooks
+      - ../markdown:/tf/markdown
+      - ../us_elec:/tf/us_elec
       - ../.jupyter:/root/.jupyter
     #stdin_open: true
-    #tty: true      
+    #tty: true
     ports:
       - 8890:8888
     networks:
@@ -47,16 +47,14 @@ services:
               count: 1
               capabilities: [gpu]
     #command: ["/bin/sh"]
-    command: ["/usr/local/bin/jupyter", 
+    command: ["/usr/local/bin/jupyter",
       "notebook",
       "--ip", "0.0.0.0",
       "--port", "8888",
       "--no-browser",
       "--allow-root",
-      "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net",      
+      "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net",
       "--notebook-dir", "/tf"]
 
 networks:
   docker_net:
-
-
