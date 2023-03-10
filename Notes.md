@@ -13,7 +13,7 @@ run container:
 - should have whole project folder mounted to dir.
 
 shut it all down
-"docker compose -f docker/docker-compose.yml down"
+`docker compose -f docker/docker-compose.yml down`
 
 Connect by logging into to `http://localhost:8890` and providing Password.
 
@@ -28,10 +28,13 @@ Clear the Remote Server List.
 - `ein: notebooklist-login`
 - Provide port 8890, then password.
 
+## Mar 9
+
+- Sketch out the table structure and desired library.
+
 ## Mar 8
 
-
-- Matplotlib inline:
+- Matplotlib inline in EIN:
   %matplotlib inline
   Add `(setq ein:output-area-inlined-images t)` to .emacs.  Otherwise it was using ImageMagick
 
@@ -57,8 +60,7 @@ c = get_config()
 
 ## Mar 6
 - Maybe move from mounting 'us_elec'?  Done
-- Need to provide a "runbook" for
-
+- Need to provide a "runbook" for loading in the data.
 
 
 # Mar 2

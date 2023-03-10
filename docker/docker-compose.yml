@@ -4,6 +4,8 @@ services:
     restart: always
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - 6543:5432
     volumes:
@@ -27,6 +29,12 @@ services:
       dockerfile: ./docker/Dockerfile.tfjupyter
       context: ../
     #user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes:
       - ../data:/tf/data
       - ../notebooks:/tf/notebooks
