@@ -3,6 +3,11 @@
 - Including motivation and changes
 - Includes daily changes.
 
+## Motivation for Docker
+- Maintaining the tensorflow environment was a pain, and finicky.  Working with Docker makes it more portable,
+ and reproduceable, albeit at the cost of working with Docker which has it's own finickyness.
+
+
 ## Running Docker setup
 - change dir to root of project
 build container:
@@ -28,9 +33,17 @@ Clear the Remote Server List.
 - `ein: notebooklist-login`
 - Provide port 8890, then password.
 
-## Mar 9
+## Mar 9/10
 
 - Sketch out the table structure and desired library.
+- Hit issue trying to login to SQL.
+- Getting `Notebook validation failed: Additional properties are not allowed ('id' was unexpected)`
+ warning.  Can silence by manually editting and make this change on file `"nbformat_minor": 5`
+
+### Postgres Docker cleanup
+- blew away default database.
+- had to set 'postgres' as hostname when connecting inside docker.
+- then username/pw/db work as expected
 
 ## Mar 8
 
