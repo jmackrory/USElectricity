@@ -1,12 +1,26 @@
 import os
 import psycopg2
 
+from functools import lru_cache
+
 #from us_elec.SQL.sql_query import eba_table_template, isd_table_template, insert_eba_data
 
 class TableType:
     EBA = 'eba'
     NDFD = 'ndfd'
     ISD = 'isd'
+
+AIR_PATH = './air_signs.csv'
+
+@lru_cache(1)
+def get_air_names(AIR_PATH):
+    with open(AIR_PATH, 'r') as fp:
+        return fp.readlines()
+
+@lru_cache(1)
+def get_eba_names(AIR_PATH):
+    with open(AIR_PATH, 'r') as fp:
+        return fp.readlines()
 
 
 class SQLDriver():
@@ -38,8 +52,10 @@ class SQLDriver():
 
     def _get_create_sql_template(table_type: str) -> str:
         if table_type == TableType.EBA:
+            # iterate over EBA columns
             return eba_table_template
         elif table_type == TableType.ISD:
+            # iterate over ISD
             return isd_table_template
 
     def insert_data(table, data):
