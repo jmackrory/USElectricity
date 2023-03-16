@@ -1,3 +1,4 @@
+import json
 import os
 import psycopg2
 
@@ -10,17 +11,60 @@ class TableType:
     NDFD = 'ndfd'
     ISD = 'isd'
 
-AIR_PATH = './air_signs.csv'
+
+DATA_DIR = '/tf/data'
+AIR_SIGN_PATH = "./meta/air_signs.csv"
+EBA_NAME_PATH = "./meta/iso_names.csv"
 
 @lru_cache(1)
-def get_air_names(AIR_PATH):
-    with open(AIR_PATH, 'r') as fp:
+def get_air_names(fn=AIR_SIGN_PATH):
+    with open(fn, 'r') as fp:
         return fp.readlines()
 
 @lru_cache(1)
-def get_eba_names(AIR_PATH):
-    with open(AIR_PATH, 'r') as fp:
+def get_eba_names(fn=EBA_NAME_PATH):
+    with open(fn, 'r') as fp:
         return fp.readlines()
+
+class EBAMeta():
+    """Class for extracting metadata about EBA dataset and saving int"""
+    def __init__(self, fn):
+        self.eba_filename = fn
+
+    def extract_meta_data(self, save_loc):
+        # need checking on location and if file exists
+
+        # subprocess.run("grep", "-r", "'category_id'", "/tf/data/EBA/EBA20230302/EBA.txt", ">", self.meta_file)
+        pass
+
+    def load_metadata(self, meta_loc):
+        fn = '/tf/data/EBA/EBA20230302/metaseries.txt'
+        meta_df = pd.read_json(fn, lines=True)
+
+    def parse_metadata(df):
+        """Grab names, abbreviations and category ids"""
+        parent_map = {}
+        iso_map = {}
+        for _, row in df.iterrows():
+            if '(' in row['name']:
+                tokens = re.findall('(\w+)', row['name'])
+                name = ' '.join(tokens[:-1])
+                abbrv = tokens[-1]
+                if abbrv == abbrv.upper():
+                    iso_map[abbrv] = name
+
+            #for ch in row.childseries
+        return iso_map
+
+    def save_iso_map(idict, fn='/tf/data/EBA/EBA20230302_iso_map.json'):
+        with open(fn, 'w') as fp:
+            json.dump(idict, fp)
+            return fn
+
+    def load_iso_map(fn='/tf/data/EBA/EBA20230302_iso_map.json'):
+        with open(fn, 'r') as fp:
+            out_d = json.load(fp)
+        return out_d
 
 
 class SQLDriver():
