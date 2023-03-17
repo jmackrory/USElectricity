@@ -20,7 +20,13 @@ run container:
 shut it all down
 `docker compose -f docker/docker-compose.yml down`
 
-Connect by logging into to `http://localhost:8890` and providing Password.
+Connect by logging into to `http://localhost:8890` and providing
+Password.
+
+For GPU support change `docker-compose.yml` to
+`docker-compose.gpu.yml`
+May also need to change `.env` `TF_IMAGE` to use a `-gpu-jupyter` image.
+
 
 #### VS Code
 - Use Jupyter plugin to log in to remote `localhost:8890`.  Note that it may be necessary to
@@ -32,6 +38,18 @@ Clear the Remote Server List.
 - `Ctrl-c Ctrl-x`
 - `ein: notebooklist-login`
 - Provide port 8890, then password.
+
+## Mar 16
+
+Copied dev over to new mac.
+This lacks a GPU, so need to handle GPU/non-GPU builds of Docker
+files.
+Can control base image via TF_IMAGE arg specified in .env, which gets
+picked up by docker-compose.
+But, that has specific requirements for GPU, which fail if not
+present.
+
+So, will make two docker-compose files.  
 
 ## Mar 9/10
 

@@ -1,4 +1,5 @@
-FROM tensorflow/tensorflow:2.11.0-gpu-jupyter
+ARG TF_IMAGE=2.11.0-jupyter 
+FROM tensorflow/tensorflow:$TF_IMAGE
 
 #USER root
 # postgres
@@ -12,6 +13,8 @@ EXPOSE 8888
 RUN apt-get update && \
     apt-get install -y \
     libgeos++-dev \
+    libaec0 \
+    libaec-dev \
     wget \
     gfortran \
     cmake
@@ -36,7 +39,6 @@ RUN make install
 
 COPY docker/requirements.txt /home/requirements.txt
 RUN pip install -r /home/requirements.txt
-
 
 RUN export JUPYTER_CONFIG_DIR=/tf/.jupyter
 
