@@ -21,7 +21,7 @@ services:
   #  volumes:
   #    - ../../docker_data/mongo-docker:/data/db
 
-  tfjupyter:
+  tfjupyter-gpu:
     depends_on:
       - postgres
       #- mongo
@@ -29,7 +29,7 @@ services:
       dockerfile: ./docker/Dockerfile.tfjupyter
       context: ../
       args:
-        TF_IMAGE: 2.11.0-jupyter 
+        TF_IMAGE: 2.11.0-gpu-jupyter   
     #user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -45,6 +45,13 @@ services:
       - ../.jupyter:/root/.jupyter
     ports:
       - 8890:8888
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     #command: ["/bin/sh"]
     command: ["/usr/local/bin/jupyter",
       "notebook",
@@ -54,4 +61,3 @@ services:
       "--allow-root",
       "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net",
       "--notebook-dir", "/tf"]
-
