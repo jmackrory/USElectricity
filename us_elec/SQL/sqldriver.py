@@ -1,6 +1,11 @@
 import json
 import os
+import re
 import psycopg2
+import subprocess
+
+import pandas as pd
+
 
 from functools import lru_cache
 
@@ -13,6 +18,7 @@ class TableType:
 
 
 DATA_DIR = '/tf/data'
+
 AIR_SIGN_PATH = "./meta/air_signs.csv"
 EBA_NAME_PATH = "./meta/iso_names.csv"
 
@@ -21,27 +27,32 @@ def get_air_names(fn=AIR_SIGN_PATH):
     with open(fn, 'r') as fp:
         return fp.readlines()
 
+
 @lru_cache(1)
 def get_eba_names(fn=EBA_NAME_PATH):
     with open(fn, 'r') as fp:
         return fp.readlines()
 
+
 class EBAMeta():
+    EBA_FILE = 'EBA.txt'
+    META_FILE = 'metaseries.txt'
+    ISO_NAME_FILE = 'iso_name_file.json'
     """Class for extracting metadata about EBA dataset and saving int"""
-    def __init__(self, fn):
-        self.eba_filename = fn
+    def __init__(self, eba_path = '/tf/data/EBA/EBA20230302/'):
+        self.eba_filename = os.path.join(eba_path, self.EBA_FILE)
+        self.meta_file = os.path.join(eba_path, self.META_FILE)
+        self.iso_file_map = os.path.join(eba_path, self.ISO_NAME_FILE)
 
-    def extract_meta_data(self, save_loc):
+    def extract_meta_data(self):
         # need checking on location and if file exists
+        os.system(f"grep -r 'category_id' {self.eba_filename} > {self.meta_file}")
 
-        # subprocess.run("grep", "-r", "'category_id'", "/tf/data/EBA/EBA20230302/EBA.txt", ">", self.meta_file)
-        pass
+    def load_metadata(self):
+        meta_df = pd.read_json(self.meta_file, lines=True)
+        return meta_df
 
-    def load_metadata(self, meta_loc):
-        fn = '/tf/data/EBA/EBA20230302/metaseries.txt'
-        meta_df = pd.read_json(fn, lines=True)
-
-    def parse_metadata(df):
+    def parse_metadata(self, df):
         """Grab names, abbreviations and category ids"""
         parent_map = {}
         iso_map = {}
@@ -56,15 +67,37 @@ class EBAMeta():
             #for ch in row.childseries
         return iso_map
 
-    def save_iso_map(idict, fn='/tf/data/EBA/EBA20230302_iso_map.json'):
-        with open(fn, 'w') as fp:
-            json.dump(idict, fp)
-            return fn
+    def save_iso_dict_json(self):
+        """Load up meta data, extract names, save to json"""
+        df = self.load_metadata()
+        iso_map = self.parse_metadata(df)
 
-    def load_iso_map(fn='/tf/data/EBA/EBA20230302_iso_map.json'):
-        with open(fn, 'r') as fp:
+        with open(self.iso_file_map, 'w') as fp:
+            json.dump(iso_map, fp)
+            return self.iso_file_map
+
+    def load_iso_dict_json(self):
+        with open(self.iso_file_map, 'r') as fp:
             out_d = json.load(fp)
         return out_d
+
+
+class AirMeta():
+    """Utils for getting call signs, sorted by state"""
+    def __init__(self, meta_file='/tf/data/air_merge_df.csv.gz', sign_file='/tf/data/air_signs.csv'):
+        self.meta_file = meta_file
+        self.sign_file = sign_file
+
+    def get_air_meta_df(self):
+        air_df = pd.read_csv(self.meta_file, index_col=0)
+        return air_df
+
+    def save_callsigns(self):
+        df = self.get_air_meta_df()
+        df.sort_values(['ST', 'CALL'])['CALL'].to_csv(self.sign_file, header=True, index=False)
+
+    def load_callsigns(self):
+        return pd.read_csv(self.sign_file)['CALL'].tolist()
 
 
 class SQLDriver():
