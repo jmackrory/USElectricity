@@ -40,6 +40,9 @@ RUN make install
 COPY docker/requirements.txt /home/requirements.txt
 RUN pip install -r /home/requirements.txt
 
+COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
+COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_config.py
+
 RUN export JUPYTER_CONFIG_DIR=/tf/.jupyter
 
 RUN export PYTHON_PATH="$PYTHON_PATH:/tf"

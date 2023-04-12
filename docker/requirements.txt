@@ -9,6 +9,7 @@ shapely==1.8.0
 pyshp==2.3.1
 cartopy==0.21.1
 tqdm==4.64.1
+line_profiler
 psycopg2-binary
 jsonlines
 xarray
