@@ -31,30 +31,6 @@ isd_table_template = """
 ;
 """
 
-eba_index = ''
+eba_index = ""
 
-isd_index = ''
-
-def get_create_eba_table_sql(table_name, var_type):
-    if var_type not in ALLOWED_TYPES:
-        raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
-
-    str_list = [
-        f"CREATE TABLE {table_name} IF NOT EXISTS",
-        "id integer,",
-        "ts timestamp,"]
-    eba_names = EBAMeta().load_iso_dict_json().keys()
-    str_list += [f"{eba} {var_type}," for eba in eba_names]
-    return " ".join(str_list)
-
-
-def get_create_air_table_sql(table_name, var_type):
-    if var_type not in ALLOWED_TYPES:
-        raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
-    str_list = [
-        f"CREATE TABLE {table_name} IF NOT EXISTS",
-        "id integer,",
-        "ts timestamp,"]
-    call_signs = AirMeta().load_callsigns()
-    str_list += [f"{eba} {var_type}," for cs in call_signs]
-    return " ".join(str_list)
+isd_index = ""
