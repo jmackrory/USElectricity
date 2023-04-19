@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 import psycopg2
 import subprocess
 
@@ -27,6 +27,15 @@ class EBAName:
     DEMAND = "demand"
     DEMAND_FORECAST = "demand_forecast"
     NET_GENERATION = "net_generation"
+    INTERCHANGE = "interchange"
+
+
+class ISDName:
+    TEMPERATURE = "temperature"
+    WIND_DIR = "wind_dir"
+    WIND_SPEED = "wind_speed"
+    PRECIP_1HR = "precip_1hr"
+    META = "air_meta"
 
 
 ALLOWED_TYPES = [SQLVar.int, SQLVar.float]
@@ -53,7 +62,7 @@ class EBAMeta:
     EBA_FILE = "EBA.txt"
     META_FILE = "metaseries.txt"
     ISO_NAME_FILE = "iso_name_file.json"
-    """Class for extracting metadata about EBA dataset and saving int"""
+    """Class for extracting metadata about EBA dataset and saving to disk"""
 
     def __init__(self, eba_path="/tf/data/EBA/EBA20230302/"):
         self.eba_filename = os.path.join(eba_path, self.EBA_FILE)
@@ -149,8 +158,7 @@ class SQLDriver:
     def create_tables(self, name_type_var_list: List[Tuple[str]]) -> bool:
         for table_type, table_name, var_type in name_type_var_list:
             sql_comm = self._get_create_sql_template(table_type, table_name, var_type)
-            with self.conn.cursor() as cur:
-                cur.execute(sql_comm)
+            self.execute_with_rollback(sql_comm, verbose=True)
 
     def _get_create_sql_template(
         self, table_type: str, table_name: str, var_type: str
@@ -168,40 +176,98 @@ class SQLDriver:
             raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
 
         str_list = [
-            f"CREATE TABLE {table_name} IF NOT EXISTS",
-            "id integer,",
+            f"CREATE TABLE IF NOT EXISTS {table_name} ",
+            "(",
             "ts timestamp,",
         ]
-        eba_names = EBAMeta().load_iso_dict_json().keys()
-        str_list += [f"{eba} {var_type}," for eba in eba_names]
-        str_list += [";"]
+        if table_name == EBAName.INTERCHANGE:
+            str_list += ["source varchar(4)," "dest varchar(4)," "val float)"]
+        else:
+            eba_names = EBAMeta().load_iso_dict_json().keys()
+            many_str_list = [f"{eba} {var_type}" for eba in eba_names]
+            str_list += [", ".join(many_str_list)]
+            str_list += [");"]
         return " ".join(str_list)
 
-    def _get_create_isd_sql(self, table_name: str, var_type: str) -> str:
+    def _get_create_isd_table_sql(self, table_name: str, var_type: str) -> str:
         """Get String SQL Command to create SQL table for NOAA ISD data from Airports."""
         if var_type not in ALLOWED_TYPES:
             raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
         str_list = [
-            f"CREATE TABLE {table_name} IF NOT EXISTS",
-            "id integer,",
+            f"CREATE TABLE IF NOT EXISTS {table_name} ",
+            "(",
             "ts timestamp,",
         ]
         call_signs = AirMeta().load_callsigns()
-        str_list += [f"{cs} {var_type}," for cs in call_signs]
-        str_list += [";"]
+        many_str_list = [f"{cs} {var_type}" for cs in call_signs]
+        str_list += [", ".join(many_str_list)]
+        str_list += [");"]
+        # index column on ts? or combine year/month?
+        # How to handle bulk update? temp table with update?
         return " ".join(str_list)
 
-    def insert_data(self, table, data):
-        # if table_type == TableType.EBA:
-        #     return eba_table_template
-        # elif table_type == TableType.ISD:
-        #     return isd_table_template
+    def insert_data(
+        self, table_name: str, data: List, col_list: Optional[List[str]] = None
+    ):
+        sql_com = self.get_insert_statement(table_name, data, col_list)
+        rv = self.execute_with_rollback(sql_com)
+        return rv
 
-        pass
+    def get_insert_statement(
+        self, table_name: str, data: list, col_list: Optional[List[str]] = None
+    ):
+        """Build up Postgres insert command."""
+        sql_com = f"INSERT INTO {table_name}"
+        if col_list:
+            sql_com += f" ({', '.join(col_list)})"
+        sql_com += " VALUES "
+        # TODO: need to query SQL table for column type.
+        # then make sure quotes present on string fields in insert statement.
+        for D in data:
+            sql_com += f" ({', '.join([str(d) for d in D])}),"
+        sql_com += ";"
+        return sql_com
 
-    def get_data(self, sql_qry):
+    def execute_with_rollback(self, sql_com: str, verbose: bool = False):
+        """Execute SQL command with rollback on exception."""
+        try:
+            if verbose:
+                print(sql_com)
+            with self.conn.cursor() as cur:
+                rv = cur.execute(sql_com)
+            self.conn.commit()
+        except Exception as e:
+            print("Exception raised!")
+            print(repr(e))
+            self.rollback()
+            rv = None
+        return rv
+
+    def drop_table(self, table_name: str, force: bool = False):
+        sql_com = f"DROP TABLE IF EXISTS {table_name};"
+        if not force:
+            print(sql_com)
+        print(f"DELETING TABLE {table_name}")
+        self.execute_with_rollback(sql_com)
+
+    def get_data(self, sql_qry: str) -> List:
+        """Execute a select query and return results."""
         with self.conn.cursor() as cur:
             cur.execute(sql_qry)
+            rv = cur.fetchall()
+        return rv
+
+    def rollback(self):
+        """Rollback failed SQL transaction"""
+        with self.conn.cursor() as cur:
+            cur.execute("ROLLBACK")
+            self.conn.commit()
+
+    def get_columns(self, table_name: str) -> List:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                f"SELECT * FROM information_schema.columns WHERE table_name = {table_name}"
+            )
             rv = cur.fetchall()
         return rv
 
@@ -211,5 +277,49 @@ def create_eba_tables():
     EBA_TABLES = [
         (TableType.EBA, EBAName.DEMAND, SQLVar.float),
         (TableType.EBA, EBAName.DEMAND_FORECAST, SQLVar.float),
+        (TableType.EBA, EBAName.NET_GENERATION, SQLVar.float),
+        (TableType.EBA, EBAName.INTERCHANGE, SQLVar.float),
     ]
     sqldr.create_tables(EBA_TABLES)
+
+
+def create_isd_tables():
+    sqldr = SQLDriver()
+    ISD_TABLES = [
+        (TableType.ISD, ISDName.TEMPERATURE, SQLVar.float),
+        (TableType.ISD, ISDName.WIND_DIR, SQLVar.float),
+        (TableType.ISD, ISDName.WIND_SPEED, SQLVar.float),
+        (TableType.ISD, ISDName.PRECIP_1HR, SQLVar.float),
+    ]
+    sqldr.create_tables(ISD_TABLES)
+
+
+def create_isd_meta():
+    sqldr = SQLDriver()
+    air_meta_create = """
+    CREATE TABLE IF NOT EXISTS air_meta 
+    (id integer,
+    name varchar(100),
+    city varchar(100),
+    state char(2),
+    callsign char(4),
+    usaf integer,
+    wban integer,
+    lat float,
+    lng float);
+    """
+    with sqldr.conn.cursor() as cur:
+        print(air_meta_create)
+        cur.execute(air_meta_create)
+
+
+def populate_isd_meta():
+    """Populate SQL table with Airport metadata from Pandas DF"""
+    air_df = AirMeta().get_air_meta_df()
+    data_cols = ["name", "City", "ST", "CALL", "USAF", "WBAN", "LAT", "LON"]
+    sub_data = air_df[data_cols].values.tolist()
+    sql_cols = ["id", "name", "city", "state", "callsign", "usaf", "wban", "lat", "lng"]
+    sqldr = SQLDriver()
+    for i, D in enumerate(sub_data):
+        D.insert(0, i)
+    sqldr.insert_data(ISDName.META, sub_data, col_list=sql_cols)
