@@ -21,6 +21,7 @@ class TableType:
 class SQLVar:
     int = "integer"
     float = "float"
+    str = "string"
 
 
 class EBAName:
@@ -214,17 +215,14 @@ class SQLDriver:
         return rv
 
     def get_insert_statement(
-        self, table_name: str, data: list, col_list: Optional[List[str]] = None
+        self, table_name: str, data_strings: list, col_list: Optional[List[str]] = None
     ):
         """Build up Postgres insert command."""
         sql_com = f"INSERT INTO {table_name}"
         if col_list:
             sql_com += f" ({', '.join(col_list)})"
         sql_com += " VALUES "
-        # TODO: need to query SQL table for column type.
-        # then make sure quotes present on string fields in insert statement.
-        for D in data:
-            sql_com += f" ({', '.join([str(d) for d in D])}),"
+        sql_com += ', '.join(data_strings)
         sql_com += ";"
         return sql_com
 
@@ -311,6 +309,7 @@ def create_isd_meta():
     with sqldr.conn.cursor() as cur:
         print(air_meta_create)
         cur.execute(air_meta_create)
+        sqldr.conn.commit()
 
 
 def populate_isd_meta():
@@ -318,8 +317,48 @@ def populate_isd_meta():
     air_df = AirMeta().get_air_meta_df()
     data_cols = ["name", "City", "ST", "CALL", "USAF", "WBAN", "LAT", "LON"]
     sub_data = air_df[data_cols].values.tolist()
-    sql_cols = ["id", "name", "city", "state", "callsign", "usaf", "wban", "lat", "lng"]
-    sqldr = SQLDriver()
+    sql_cols = [("id", SQLVar.int),
+                ("name", SQLVar.str),
+                ("city", SQLVar.str),
+                ("state", SQLVar.str), 
+                ("callsign", SQLVar.str),
+                ("usaf", SQLVar.int),
+                ("wban", SQLVar.int),
+                ("lat", SQLVar.float),
+                ("lng", SQLVar.float)]
+    col_types = [x[1] for x in sql_cols]
+    col_names = [x[0] for x in sql_cols]
     for i, D in enumerate(sub_data):
         D.insert(0, i)
-    sqldr.insert_data(ISDName.META, sub_data, col_list=sql_cols)
+    data_strings = [format_insert_str(D, col_types) for D in sub_data]
+    sqldr = SQLDriver()
+
+    sqldr.insert_data(ISDName.META, data_strings, col_list=col_names)
+    return data_strings[:5]        
+
+# feels like there should be a structure for var type encapsulating name, sql column, and formating
+# And this is the path to how you end up writing SQLAlchemy.
+
+def format_insert_str(data:List, st_type_list: List) -> str:
+    """Create insert string for inserting data record into SQL
+    """
+    out_str = "("
+    Ncol = len(st_type_list)
+    for i, st in enumerate(data):
+        st_type = st_type_list[i]
+        if st_type == SQLVar.str:
+            # just remove quotes.
+            st0 = st.replace("\'",'').replace('\"','')
+            out_str += f"'{st0}'"
+        else:
+            out_str += f"{st}"
+        if i < Ncol-1:
+            out_str += ", "
+    out_str += ")"
+    return out_str
+
+
+
+
+
+# Going to stick to assumption that inserting code handles proper conversion.
