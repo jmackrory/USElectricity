@@ -408,7 +408,7 @@ def get_all_data_http(aircode, start_year=2015, end_year=2020):
 # now read it in, convert to time-series.
 
 
-def convert_isd_to_df(filename, city, state):
+def load_isd_df(filename):
     """
     convert_to_df(filename)
 
@@ -450,20 +450,50 @@ def convert_isd_to_df(filename, city, state):
     df = pd.read_fwf(
         filename, compression="gzip", na_values=["-9999", "999"], names=col_names
     )
-    city_st = city + ", " + state
-    df["city"] = city
-    df["state"] = state
-    df["city, state"] = city_st
-    df["region"] = region_dict[state]
+
     # make a time index.
     times = pd.to_datetime(
         {"year": df["year"], "month": df["month"], "day": df["day"], "hour": df["hour"]}
     )
     Tindex = pd.DatetimeIndex(times)
     df.index = Tindex
+    return df
+
+
+def convert_isd_to_df(filename, city, state):
+    """
+    convert_to_df(filename)
+
+    Read in a automated weather stations data from file.
+    Data is space separated columns, with format given in
+    "isd-lite-format.txt".
+    Converts to pandas dataframe using date/time columns as DateTimeIndex.
+    Format info:
+    1: Year
+    2: Month
+    3: Day
+    4: Hour
+    5: Temperature (x10) in celcius
+    6: Dew point temperature (x10) in celcius
+    7: Sea level pressure (x10 in hectopascals)
+    8: Wind direction (degrees from north)
+    9: Wind speed (x10 in meters per second)
+    10: Cloud Coverage (categorical)
+    11: Precipitation for One Hour (x10, in mm)
+    12: Precipitation total for Six hours (x10 in mm)
+
+    All missing values are -9999.
+    """
+    df = load_isd_df(filename)
     # df.index = pd.MultiIndex.from_product([Tindex,[city_st]])
     # delete those columns
     df = df.drop(labels=["year", "month", "day", "hour"], axis=1)
+    df["city"] = city
+    df["state"] = state
+    city_st = city + ", " + state
+    df["city, state"] = city_st
+    df["region"] = region_dict[state]
+
     return df
 
 
