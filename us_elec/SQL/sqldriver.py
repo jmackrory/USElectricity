@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import random
@@ -42,6 +43,7 @@ class ISDName:
 
 
 class ISDDFName:
+    TIME = "Time"
     TEMPERATURE = "Temp"
     DEW_TEMPERATURE = "DewTemp"
     PRESSURE = "Pressure"
@@ -51,6 +53,24 @@ class ISDDFName:
     PRECIP_1HR = "Precip-1hr"
     PRECIP_6HR = "Precip-6hr"
 
+    lookup = {}
+
+
+ISD_COLS = [
+    "Year",
+    "Month",
+    "Day",
+    "Hour",
+    "Temp",
+    "DewTemp",
+    "Pressure",
+    "WindDir",
+    "WindSpeed",
+    "CloudCover",
+    "Precip-1hr",
+    "Precip-6hr",
+]
+
 
 ALLOWED_TYPES = [SQLVar.int, SQLVar.float]
 
@@ -58,6 +78,8 @@ DATA_DIR = "/tf/data"
 
 AIR_SIGN_PATH = "./meta/air_signs.csv"
 EBA_NAME_PATH = "./meta/iso_names.csv"
+
+YEARS = list(range(2015, 2024))
 
 
 @lru_cache(1)
@@ -172,7 +194,6 @@ class ISDMeta:
         self.meta_file = meta_file
         self.sign_file = sign_file
         self.sqldr = SQLDriver()
-        self.YEARS = list(range(2015, 2023))
         self.ISD_TABLES = [
             (ISDName.TEMPERATURE, SQLVar.float, ISDDFName.TEMPERATURE),
             (ISDName.WIND_DIR, SQLVar.float, ISDDFName.WIND_DIR),
@@ -196,7 +217,7 @@ class ISDMeta:
 
     def create_isd_meta(self):
         air_meta_create = """
-        CREATE TABLE IF NOT EXISTS air_meta 
+        CREATE TABLE IF NOT EXISTS air_meta
         (id integer,
         name varchar(100),
         city varchar(100),
@@ -263,30 +284,69 @@ class ISDMeta:
     def get_isd_filenames(self):
         """Use ISD Meta table to build up known"""
         wban_usaf_list = self.sqldr.get_data(
-            f"SELECT USAF, WBAN, CALLSIGN FROM {ISDName.AIR_META}"
+            f"SELECT USAF, WBAN, CALLSIGN FROM {ISDName.META}"
         )
 
         file_list = []
-        for wban, usaf, callsign in wban_usaf_list:
-            for year in self.YEARS:
+        for usaf, wban, callsign in wban_usaf_list:
+            for year in YEARS:
                 filename = get_local_isd_path(str(year), usaf, wban)
                 if os.path.exists(filename) and os.path.getsize(filename) > 0:
                     file_list.append((filename, callsign))
         return file_list
 
-    def load_data(self):
-        files = self.get_isd_filenames()
+    def load_data(self, Nst=-1, Nmax=-1):
+        """Load data for each station by year and insert desired data into columns of relevant tables.
+        Tables / Columns governed by ISD_TABLES
+        Each table has columns for each callsign.
+        """
+        files = self.get_isd_filenames()[:Nst]
+
+        out_sql = []
         for file, callsign in files:
             df = load_isd_df(file)
             for sql_table, data_type, df_col in self.ISD_TABLES:
-                data = self.get_df_data_cols(df, df_col)
+                data = self.get_df_data_cols(df, df_col)[:Nmax]
                 data_types = ("datetime", data_type)
                 cols = ["ts", callsign]
-            self.sqldr.upsert_data_column(sql_table, cols, data_type)
+                s_c = self.sqldr.upsert_data_column(sql_table, cols, data_types, data)
+                out_sql.append(s_c)
+        return out_sql
 
     def get_df_data_cols(self, df, df_col):
         """Get list of columns suitable for loading into SQL"""
-        pass
+        sub_ser = df[df_col]
+        return list(zip(sub_ser.index.values.tolist(), sub_ser.values.tolist()))
+
+    def load_isd_data(self, filename):
+        """
+        load_isd_data(filename)
+
+        Read in a automated weather stations data from file.
+        Data is space separated columns, with format given in
+        "isd-lite-format.txt".
+        Converts to pandas dataframe using date/time columns as DateTimeIndex.
+        Format info:
+        1: Year
+        2: Month
+        3: Day
+        4: Hour
+        5: Temperature (x10) in celcius
+        6: Dew point temperature (x10) in celcius
+        7: Sea level pressure (x10 in hectopascals)
+        8: Wind direction (degrees from north)
+        9: Wind speed (x10 in meters per second)
+        10: Cloud Coverage (categorical)
+        11: Precipitation for One Hour (x10, in mm)
+        12: Precipitation total for Six hours (x10 in mm)
+
+        All missing values are -9999.
+        """
+        # use fixed width format to read in (isd-lite-format has data format)
+        with open(filename, "rb") as fp:
+            creader = csv.reader(fp)
+            data = list(creader)
+        return data
 
 
 class SQLDriver:
@@ -374,6 +434,7 @@ class SQLDriver:
             f"ON CONFLICT ({cols[0]}) DO UPDATE SET {cols[1]}=EXCLUDED.{cols[1]};"
         )
         # self.execute_with_rollback(sql_comm)
+        return sql_comm
 
     def drop_table(self, table_name: str, force: bool = False):
         sql_com = f"DROP TABLE IF EXISTS {table_name};"

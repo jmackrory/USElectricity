@@ -4,6 +4,7 @@ scikit-learn
 statsmodels
 sqlalchemy
 ipdb
+ipykernel >= 6.0.0
 geos
 shapely==1.8.0
 pyshp==2.3.1
