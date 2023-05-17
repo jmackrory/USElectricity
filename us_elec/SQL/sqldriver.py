@@ -95,10 +95,18 @@ def get_eba_names(fn=EBA_NAME_PATH):
 
 
 class EBAMeta:
+    """Class for extracting metadata about EBA dataset and saving to disk"""
+
     EBA_FILE = "EBA.txt"
     META_FILE = "metaseries.txt"
     ISO_NAME_FILE = "iso_name_file.json"
-    """Class for extracting metadata about EBA dataset and saving to disk"""
+
+    EBA_TABLES = [
+        (EBAName.DEMAND, SQLVar.float),
+        (EBAName.DEMAND_FORECAST, SQLVar.float),
+        (EBAName.NET_GENERATION, SQLVar.float),
+        (EBAName.INTERCHANGE, SQLVar.float),
+    ]
 
     def __init__(self, eba_path="/tf/data/EBA/EBA20230302/"):
         self.eba_filename = os.path.join(eba_path, self.EBA_FILE)
@@ -115,7 +123,7 @@ class EBAMeta:
         return meta_df
 
     def parse_metadata(self, df: pd.DataFrame) -> Dict:
-        """Grab names, abbreviations and category ids"""
+        """Grab names, abbreviations and category ids and save to dict"""
         iso_map = {}
         for _, row in df.iterrows():
             if "(" in row["name"]:
@@ -145,16 +153,21 @@ class EBAMeta:
 
     def create_eba_tables(self):
         """Create all relevant Tables for EBA data"""
-        EBA_TABLES = [
-            (TableType.EBA, EBAName.DEMAND, SQLVar.float),
-            (TableType.EBA, EBAName.DEMAND_FORECAST, SQLVar.float),
-            (TableType.EBA, EBAName.NET_GENERATION, SQLVar.float),
-            (TableType.EBA, EBAName.INTERCHANGE, SQLVar.float),
-        ]
 
-        for table_type, table_name, var_type in EBA_TABLES:
+        for table_name, var_type in self.EBA_TABLES:
             sql_comm = self._get_create_eba_table_sql(table_name, var_type)
             self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
+    def drop_eba_tables(self, execute=False):
+        """Drop the tables!
+        execute=False means only print commands.
+        execute=True will execute!
+        """
+        for table_name, _ in self.EBA_TABLES:
+            sql_comm = f"DROP TABLE IF NOT EXISTS {table_name};"
+            print(sql_comm)
+            if execute is True:
+                self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
     def _get_create_eba_table_sql(self, table_name: str, var_type: str) -> str:
         """Get String SQL Command to create SQL table for EIA EBA data for ISOs."""
@@ -172,7 +185,7 @@ class EBAMeta:
             eba_names = EBAMeta().load_iso_dict_json().keys()
             many_str_list = [f"{eba} {var_type}" for eba in eba_names]
             str_list += [", ".join(many_str_list)]
-            str_list += [");"]
+            str_list += [") PRIMARY KEY ts;"]
         return " ".join(str_list)
 
     def load_data():
@@ -264,6 +277,17 @@ class ISDMeta:
             sql_comm = self._get_create_isd_table_sql(table_name, var_type)
             self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
+    def drop_isd_tables(self, execute=False):
+        """Drop the tables!
+        execute is not True means only print commands.
+        execute = True will execute, and drop the table!
+        """
+        for table_name, _, _ in self.ISD_TABLES:
+            sql_comm = f"DROP TABLE IF NOT EXISTS {table_name};"
+            print(sql_comm)
+            if execute is True:
+                self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
     def _get_create_isd_table_sql(self, table_name: str, var_type: str) -> str:
         """Get String SQL Command to create SQL table for NOAA ISD data from Airports."""
         if var_type not in ALLOWED_TYPES:
@@ -276,7 +300,7 @@ class ISDMeta:
         call_signs = self.load_callsigns()
         many_str_list = [f"{cs} {var_type}" for cs in call_signs]
         str_list += [", ".join(many_str_list)]
-        str_list += [");"]
+        str_list += [") PRIMARY KEY ts;"]
         # index column on ts? or combine year/month?
         # How to handle bulk update? temp table with update?
         return " ".join(str_list)
