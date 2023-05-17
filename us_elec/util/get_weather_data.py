@@ -408,7 +408,7 @@ def get_all_data_http(aircode, start_year=2015, end_year=2020):
 # now read it in, convert to time-series.
 
 
-def load_isd_df(filename):
+def load_isd_df(filename, tzstr=None):
     """
     convert_to_df(filename)
 
@@ -455,8 +455,9 @@ def load_isd_df(filename):
     times = pd.to_datetime(
         {"year": df["year"], "month": df["month"], "day": df["day"], "hour": df["hour"]}
     )
+
     Tindex = pd.DatetimeIndex(times)
-    df.index = Tindex
+    df.index = Tindex.tz_localize(tzstr)
     return df
 
 
@@ -534,7 +535,7 @@ def convert_all_isd(air_df):
     nmax = len(air_df)
     for i in range(nmax):
         for yearstr in range(START_YR, END_YR):
-            yearstr = year
+            #yearstr = year
             ap = air_df.iloc[i]
             usaf = ap["USAF"]
             wban = ap["WBAN"]

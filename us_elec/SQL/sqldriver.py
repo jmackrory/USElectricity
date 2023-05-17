@@ -4,9 +4,10 @@ import os
 import random
 import re
 from typing import Dict, List, Optional, Tuple
-import psycopg2
 import subprocess
 
+import psycopg2
+from tzfpy import get_tz
 import pandas as pd
 
 from functools import lru_cache
@@ -284,15 +285,16 @@ class ISDMeta:
     def get_isd_filenames(self):
         """Use ISD Meta table to build up known"""
         wban_usaf_list = self.sqldr.get_data(
-            f"SELECT USAF, WBAN, CALLSIGN FROM {ISDName.META}"
+            f"SELECT USAF, WBAN, CALLSIGN, LAT, LNG FROM {ISDName.META}"
         )
 
         file_list = []
-        for usaf, wban, callsign in wban_usaf_list:
+        for usaf, wban, callsign, lat, lng in wban_usaf_list:
             for year in YEARS:
                 filename = get_local_isd_path(str(year), usaf, wban)
                 if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                    file_list.append((filename, callsign))
+                    tzstr = get_tz(lng, lat)
+                    file_list.append((filename, callsign, tzstr))
         return file_list
 
     def load_data(self, Nst=-1, Nmax=-1):
@@ -303,10 +305,10 @@ class ISDMeta:
         files = self.get_isd_filenames()[:Nst]
 
         out_sql = []
-        for file, callsign in files:
-            df = load_isd_df(file)
+        for file, callsign, tzstr in files:
+            df = load_isd_df(file, tzstr)
             for sql_table, data_type, df_col in self.ISD_TABLES:
-                data = self.get_df_data_cols(df, df_col)[:Nmax]
+                data = self.get_df_data_cols(df, df_col, tzstr)[:Nmax]
                 data_types = ("datetime", data_type)
                 cols = ["ts", callsign]
                 s_c = self.sqldr.upsert_data_column(sql_table, cols, data_types, data)
@@ -316,37 +318,9 @@ class ISDMeta:
     def get_df_data_cols(self, df, df_col):
         """Get list of columns suitable for loading into SQL"""
         sub_ser = df[df_col]
-        return list(zip(sub_ser.index.values.tolist(), sub_ser.values.tolist()))
-
-    def load_isd_data(self, filename):
-        """
-        load_isd_data(filename)
-
-        Read in a automated weather stations data from file.
-        Data is space separated columns, with format given in
-        "isd-lite-format.txt".
-        Converts to pandas dataframe using date/time columns as DateTimeIndex.
-        Format info:
-        1: Year
-        2: Month
-        3: Day
-        4: Hour
-        5: Temperature (x10) in celcius
-        6: Dew point temperature (x10) in celcius
-        7: Sea level pressure (x10 in hectopascals)
-        8: Wind direction (degrees from north)
-        9: Wind speed (x10 in meters per second)
-        10: Cloud Coverage (categorical)
-        11: Precipitation for One Hour (x10, in mm)
-        12: Precipitation total for Six hours (x10 in mm)
-
-        All missing values are -9999.
-        """
-        # use fixed width format to read in (isd-lite-format has data format)
-        with open(filename, "rb") as fp:
-            creader = csv.reader(fp)
-            data = list(creader)
-        return data
+        times = sub_ser.index.values.apply(isoformat)  # get list of strings.
+        data_vals = sub_ser.values.tolist()
+        return list(zip(times, data_vals))
 
 
 class SQLDriver:
@@ -429,7 +403,7 @@ class SQLDriver:
         """
         col_str = ",".join(cols)
         sql_comm = f"INSERT INTO {table_name}({col_str}) VALUES"
-        sql_comm += format_insert_str(data, col_types)
+        sql_comm += ",\n".join([format_insert_str(D, col_types) for D in data])
         sql_comm += (
             f"ON CONFLICT ({cols[0]}) DO UPDATE SET {cols[1]}=EXCLUDED.{cols[1]};"
         )
