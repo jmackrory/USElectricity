@@ -25,6 +25,7 @@ services:
     depends_on:
       - postgres
       #- mongo
+    container_name: tfjupyter
     build:
       dockerfile: ./docker/Dockerfile.tfjupyter
       context: ../
@@ -41,6 +42,7 @@ services:
       - ../data:/tf/data
       - ../notebooks:/tf/notebooks
       - ../markdown:/tf/markdown
+      - ../scripts:/tf/scripts      
       - ../us_elec:/tf/us_elec
       - ../.jupyter:/root/.jupyter
     ports:

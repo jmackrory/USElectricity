@@ -5,10 +5,12 @@ import random
 import re
 from typing import Dict, List, Optional, Tuple
 import subprocess
+import jsonlines
 
 import psycopg2
 from tzfpy import get_tz
 import pandas as pd
+from tqdm import tqdm
 
 from functools import lru_cache
 
@@ -26,16 +28,46 @@ class SQLVar:
     int = "integer"
     float = "float"
     str = "string"
+    timestamp = "timestamp"
 
 
 class EBAName:
+    EBA = "EBA"
     DEMAND = "demand"
     DEMAND_FORECAST = "demand_forecast"
     NET_GENERATION = "net_generation"
     INTERCHANGE = "interchange"
 
 
+class ColName:
+    TS = "ts"
+    SOURCE = "source"
+    CALL = "callsign"
+    MEASURE = "measure"
+    DEST = "dest"
+    VAL = "val"
+
+
+class EBAAbbr:
+    NG = "Net Generation"
+    ID = "Net Interchange"
+    DF = "Demand Forecast"
+    D = "Demand"
+    TI = "Total Interchange"
+
+
+class EBAGenAbbr:
+    COL = "Coal"
+    WND = "Wind"
+    WAT = "Hydro"
+    SOL = "Solar"
+    NUC = "Nuclear"
+    NG = "Natural Gas"
+    OTH = "Other"
+
+
 class ISDName:
+    ISD = "isd"
     TEMPERATURE = "temperature"
     WIND_DIR = "wind_dir"
     WIND_SPEED = "wind_speed"
@@ -103,10 +135,8 @@ class EBAMeta:
     ISO_NAME_FILE = "iso_name_file.json"
 
     EBA_TABLES = [
-        (EBAName.DEMAND, SQLVar.float),
-        (EBAName.DEMAND_FORECAST, SQLVar.float),
-        (EBAName.NET_GENERATION, SQLVar.float),
-        (EBAName.INTERCHANGE, SQLVar.float),
+        EBAName.EBA,
+        EBAName.INTERCHANGE,
     ]
 
     def __init__(self, eba_path="/tf/data/EBA/EBA20230302/"):
@@ -152,49 +182,88 @@ class EBAMeta:
             out_d = json.load(fp)
         return out_d
 
-    def create_eba_tables(self):
+    def create_tables(self):
         """Create all relevant Tables for EBA data"""
+        sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.EBA}
+            ({ColName.TS} timestamp,
+            {ColName.SOURCE} varchar(4),
+            {ColName.MEASURE} varchar(20),
+            {ColName.VAL} float);"""
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
-        for table_name, var_type in self.EBA_TABLES:
-            sql_comm = self._get_create_eba_table_sql(table_name, var_type)
-            self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+        sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.INTERCHANGE}
+            ({ColName.TS} timestamp, {ColName.SOURCE} varchar(4), {ColName.DEST} varchar(4), {ColName.VAL} float);"""
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
-    def drop_eba_tables(self, execute=False):
+    def drop_tables(self, execute=False):
         """Drop the tables!
         execute=False means only print commands.
         execute=True will execute!
         """
         for table_name, _ in self.EBA_TABLES:
-            sql_comm = f"DROP TABLE IF NOT EXISTS {table_name};"
+            sql_comm = f"DROP TABLE IF EXISTS {table_name};"
             print(sql_comm)
             if execute is True:
                 self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
-    def _get_create_eba_table_sql(self, table_name: str, var_type: str) -> str:
-        """Get String SQL Command to create SQL table for EIA EBA data for ISOs."""
-        if var_type not in ALLOWED_TYPES:
-            raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
+    # def _get_create_eba_table_sql_wide(self, table_name: str, var_type: str) -> str:
+    #     """Get String SQL Command to create SQL table for EIA EBA data for ISOs."""
+    #     if var_type not in ALLOWED_TYPES:
+    #         raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
 
-        str_list = [
-            f"CREATE TABLE IF NOT EXISTS {table_name} ",
-            "(",
-            "ts timestamp,",
-        ]
-        if table_name == EBAName.INTERCHANGE:
-            str_list += ["source varchar(4)," "dest varchar(4)," "val float)"]
-        else:
-            eba_names = EBAMeta().load_iso_dict_json().keys()
-            many_str_list = [f"{eba} {var_type}" for eba in eba_names]
-            str_list += [", ".join(many_str_list)]
-            str_list += [") PRIMARY KEY ts;"]
-        return " ".join(str_list)
+    #     str_list = [
+    #         f"CREATE TABLE IF NOT EXISTS {table_name} ",
+    #         "(",
+    #         "ts timestamp,",
+    #     ]
+    #     if table_name == EBAName.INTERCHANGE:
+    #         str_list += ["source varchar(4)," "dest varchar(4)," "val float)"]
+    #     else:
+    #         eba_names = self.load_iso_dict_json().keys()
+    #         many_str_list = [f"{eba} {var_type}" for eba in eba_names]
+    #         str_list += [", ".join(many_str_list)]
+    #         str_list += [") PRIMARY KEY ts;"]
+    #     return " ".join(str_list)
 
-    def load_data():
+    def parse_eba_series_id(self, str):
+        sub = str.split(".")[1:]  # drop the EBA
+        source, dest = sub[0].split("-")
+        tag = sub[1:-1].join("-")
+        time = sub[-1]
+        return source, dest, tag, time
+
+    def load_data(self):
+        """Load in relevant data series.  Only keep the ones on UTC time."""
         # load files one by one.
         # if in desired type, then insert.
         # before insert, check if times exists.
         # otherwise update based on time overlap.
-        pass
+
+        int_str = re.compile("Actual Net Interchange")
+        utc_str = re.compile("UTC")
+
+        # name_reg = re.compile(f'{name_lookup}') if name_lookup else None
+        with jsonlines.open(self.eba_filename, "r") as fh:
+            for dat in tqdm(fh):
+                if not dat["series_id"] and not dat["data"]:
+                    continue
+                if utc_str not in dat["name"]:
+                    continue
+                source, dest, tag, time = self.parse_eba_series_id(dat["series_id"])
+                if int_str in dat["name"]:
+                    table_name = EBAName.INTERCHANGE
+                    cols = ["ts", "source", "dest", "value"]
+                    col_types = [SQLVar.timestamp, SQLVar.str, SQLVar.str, SQLVar.float]
+                    unique_list = ["ts", "source", "dest"]
+                else:
+                    table_name = EBAName.INTERCHANGE
+                    cols = ["ts", "source", "measure", "value"]
+                    col_types = [SQLVar.timestamp, SQLVar.str, SQLVar.str, SQLVar.float]
+                    unique_list = ["ts", "source", "measure"]
+                data_list = [(x[0], source, dest, x[1]) for x in dat["data"]]
+                self.sqldr.upsert_data_column(
+                    table_name, cols, col_types, data_list, unique_list
+                )
 
 
 class ISDMeta:
@@ -208,7 +277,8 @@ class ISDMeta:
         self.meta_file = meta_file
         self.sign_file = sign_file
         self.sqldr = SQLDriver()
-        self.ISD_TABLES = [
+        self.ISD_TABLES = [ISDName.ISD]
+        self.ISD_MEASURES = [
             (ISDName.TEMPERATURE, SQLVar.float, ISDDFName.TEMPERATURE),
             (ISDName.WIND_DIR, SQLVar.float, ISDDFName.WIND_DIR),
             (ISDName.WIND_SPEED, SQLVar.float, ISDDFName.WIND_SPEED),
@@ -274,44 +344,51 @@ class ISDMeta:
 
     def create_isd_tables(self):
         """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
-        for table_name, var_type, _ in self.ISD_TABLES:
-            sql_comm = self._get_create_isd_table_sql(table_name, var_type)
-            self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+        sql_comm = f"""
+        CREATE TABLE IF NOT EXISTS {ISDName.ISD}
+            ({ColName.TS} timestamp, {ColName.CALL} char(4), {ColName.MEASURE} varchar(20), {ColName.VAL} float);
+        """
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
+    def create_isd_indexes(self):
+        """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
+        sql_comm = f"CREATE INDEX ix_{ISDName.ISD} ON {ISDName.ISD} ({ColName.TS}, {ColName.MEASURE}, {ColName.CALL});"
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
+    # def _get_create_isd_table_sql_wide(self, table_name: str, var_type: str) -> str:
+    #     """Get String SQL Command to create SQL table for NOAA ISD data from Airports.
+    #     Old form with wide table format with one col per airport"""
+    #     if var_type not in ALLOWED_TYPES:
+    #         raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
+    #     str_list = [
+    #         f"CREATE TABLE IF NOT EXISTS {table_name} ",
+    #         "(ts timestamp,",
+    #     ]
+    #     call_signs = self.load_callsigns()
+    #     many_str_list = [f"{cs} {var_type}" for cs in call_signs]
+    #     str_list += [", ".join(many_str_list)]
+    #     str_list += [") PRIMARY KEY ts;"]
+    #     # index column on ts? or combine year/month?
+    #     # How to handle bulk update? temp table with update?
+    #     return " ".join(str_list)
 
     def drop_isd_tables(self, execute=False):
-        """Drop the tables!
+        """Drop the tables!  Only sould be used when cleaning up setup.
         execute is not True means only print commands.
         execute = True will execute, and drop the table!
         """
         for table_name, _, _ in self.ISD_TABLES:
-            sql_comm = f"DROP TABLE IF NOT EXISTS {table_name};"
+            sql_comm = f"DROP TABLE IF EXISTS {table_name};"
             print(sql_comm)
             if execute is True:
+                print(f"Dropping table {table_name}!")
                 self.sqldr.execute_with_rollback(sql_comm, verbose=True)
-
-    def _get_create_isd_table_sql(self, table_name: str, var_type: str) -> str:
-        """Get String SQL Command to create SQL table for NOAA ISD data from Airports."""
-        if var_type not in ALLOWED_TYPES:
-            raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
-        str_list = [
-            f"CREATE TABLE IF NOT EXISTS {table_name} ",
-            "(",
-            "ts timestamp,",
-        ]
-        call_signs = self.load_callsigns()
-        many_str_list = [f"{cs} {var_type}" for cs in call_signs]
-        str_list += [", ".join(many_str_list)]
-        str_list += [") PRIMARY KEY ts;"]
-        # index column on ts? or combine year/month?
-        # How to handle bulk update? temp table with update?
-        return " ".join(str_list)
 
     def get_isd_filenames(self):
         """Use ISD Meta table to build up known"""
         wban_usaf_list = self.sqldr.get_data(
             f"SELECT USAF, WBAN, CALLSIGN, LAT, LNG FROM {ISDName.META}"
         )
-
         file_list = []
         for usaf, wban, callsign, lat, lng in wban_usaf_list:
             for year in YEARS:
@@ -342,7 +419,9 @@ class ISDMeta:
     def get_df_data_cols(self, df, df_col):
         """Get list of columns suitable for loading into SQL"""
         sub_ser = df[df_col]
-        times = sub_ser.index.values.apply(isoformat)  # get list of strings.
+        times = sub_ser.index.values.apply(
+            lambda x: x.isoformat()
+        )  # get list of strings.
         data_vals = sub_ser.values.tolist()
         return list(zip(times, data_vals))
 
@@ -368,16 +447,6 @@ class SQLDriver:
             dbname=db, user=user, password=pw, host="postgres", port=5432
         )
         return conn
-
-    # def _get_create_sql_template(
-    #     self, table_type: str, table_name: str, var_type: str
-    # ) -> str:
-    #     if table_type == TableType.EBA:
-    #         # iterate over EBA columns
-    #         return EBAMeta._get_create_eba_table_sql(table_name, var_type)
-    #     elif table_type == TableType.ISD:
-    #         # iterate over ISD
-    #         return ISDMeta._get_create_isd_table_sql(table_name, var_type)
 
     def rollback(self):
         """Rollback failed SQL transaction"""
@@ -419,11 +488,13 @@ class SQLDriver:
         sql_com += ";"
         return sql_com
 
-    def upsert_data_column(self, table_name, cols, col_types, data):
+    def upsert_data_column(
+        self, table_name: str, cols: List[str], col_types: List[str], data: List[List]
+    ) -> str:
         """Upsert Data
 
         Update columns with existing initial columns, and otherwise insert row.
-        Useful for loading in column by column.
+        Useful for loading in column by column for wide tables.
         """
         col_str = ",".join(cols)
         sql_comm = f"INSERT INTO {table_name}({col_str}) VALUES"
