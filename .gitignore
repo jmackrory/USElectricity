@@ -4,3 +4,6 @@ data/*
 *__pycache__*
 .#*
 *venv*
+.vscode
+.mypy*
+.history

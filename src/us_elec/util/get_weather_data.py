@@ -411,12 +411,13 @@ def get_all_data_http(aircode, start_year=2015, end_year=2020):
 
 def load_isd_df(filename, tzstr=None):
     """
-    convert_to_df(filename)
+    load_isd_df(filename)
 
     Read in a automated weather stations data from file.
     Data is space separated columns, with format given in
     "isd-lite-format.txt".
     Converts to pandas dataframe using date/time columns as DateTimeIndex.
+    Note: times are all in UTC format
     Format info:
     1: Year
     2: Month
@@ -458,7 +459,9 @@ def load_isd_df(filename, tzstr=None):
     )
 
     Tindex = pd.DatetimeIndex(times)
-    df.index = Tindex.tz_localize(tzstr)
+    df.index = (
+        Tindex  # .tz_localize(tzstr)#, ambiguous='infer', nonexistent='shift_forward')
+    )
     return df
 
 

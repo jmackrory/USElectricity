@@ -1,3 +1,5 @@
+# Old code for loading all data into SQL.  May be useful for ELEC data?
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt

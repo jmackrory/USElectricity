@@ -40,6 +40,10 @@ RUN make install
 COPY docker/requirements.txt /home/requirements.txt
 RUN pip install -r /home/requirements.txt
 
+COPY us_elec /home/us_elec
+WORKDIR /home/us_elec
+RUN pip install -e .
+
 COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
 COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_config.py
 

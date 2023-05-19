@@ -68,9 +68,9 @@ class EBAGenAbbr:
 
 class ISDName:
     ISD = "ISD"
-    TEMPERATURE = "temperature"
+    TEMPERATURE = "temp"
     WIND_DIR = "wind_dir"
-    WIND_SPEED = "wind_speed"
+    WIND_SPEED = "wind_spd"
     PRECIP_1HR = "precip_1hr"
     META = "air_meta"
 
@@ -186,14 +186,18 @@ class EBAMeta:
             ({ColName.TS} timestamp with time zone,
             {ColName.SOURCE} varchar(4),
             {ColName.MEASURE} varchar(20),
-            {ColName.VAL} float);"""
+            {ColName.VAL} float,
+            UNIQUE ({ColName.TS}, {ColName.SOURCE}, {ColName.MEASURE})
+            );"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
         sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.INTERCHANGE}
             ({ColName.TS} timestamp with time zone,
             {ColName.SOURCE} varchar(4),
             {ColName.DEST} varchar(4),
-            {ColName.VAL} float);"""
+            {ColName.VAL} float,
+            UNIQUE ({ColName.TS}, {ColName.SOURCE}, {ColName.DEST})
+            );"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
     def create_indexes(self):
@@ -292,10 +296,10 @@ class ISDMeta:
         self.sqldr = SQLDriver()
         self.ISD_TABLES = [ISDName.ISD]
         self.ISD_MEASURES = [
-            (ISDName.TEMPERATURE, SQLVar.float, ISDDFName.TEMPERATURE),
-            (ISDName.WIND_DIR, SQLVar.float, ISDDFName.WIND_DIR),
-            (ISDName.WIND_SPEED, SQLVar.float, ISDDFName.WIND_SPEED),
-            (ISDName.PRECIP_1HR, SQLVar.float, ISDDFName.PRECIP_1HR),
+            (ISDName.TEMPERATURE, ISDDFName.TEMPERATURE),
+            # (ISDName.WIND_DIR, ISDDFName.WIND_DIR),
+            (ISDName.WIND_SPEED, ISDDFName.WIND_SPEED),
+            (ISDName.PRECIP_1HR, ISDDFName.PRECIP_1HR),
         ]
 
     def get_air_meta_df(self) -> pd.DataFrame:
@@ -362,7 +366,9 @@ class ISDMeta:
             ({ColName.TS} timestamp with time zone,
             {ColName.CALL} char(4),
             {ColName.MEASURE} varchar(20),
-            {ColName.VAL} float);
+            {ColName.VAL} float,
+            UNIQUE ({ColName.TS}, {ColName.CALL}, {ColName.MEASURE})
+            );
         """
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
@@ -421,27 +427,33 @@ class ISDMeta:
         """
         files = self.get_isd_filenames()[:Nst]
 
-        out_sql = []
-        for file, callsign, tzstr in files:
+        # out_sql = []
+        for file, callsign, tzstr in tqdm(files):
             df = load_isd_df(file, tzstr)
-            for measure, df_col in self.ISD_TABLES:
-                data = self.get_df_data_cols(df, df_col, tzstr)[:Nmax]
+            for measure, df_col in self.ISD_MEASURES:
+                data = self.get_df_data_cols(df, df_col)[:Nmax]
                 data_types = (SQLVar.timestamptz, SQLVar.str, SQLVar.str, SQLVar.float)
                 cols = [ColName.TS, ColName.CALL, ColName.MEASURE, ColName.VAL]
                 unique_list = [ColName.TS, ColName.CALL, ColName.MEASURE]
                 data = [(x[0], callsign, measure, x[1]) for x in data]
                 s_c = self.sqldr.upsert_data_column(
-                    ISDName.ISD, cols, data_types, data, unique_list
+                    table_name=ISDName.ISD,
+                    col_list=cols,
+                    col_types=data_types,
+                    data=data,
+                    unique_list=unique_list,
+                    val_col=ColName.VAL,
                 )
-                out_sql.append(s_c)
-        return out_sql
+                # out_sql.append(s_c)
+        # return out_sql
 
-    def get_df_data_cols(self, df, df_col):
-        """Get list of columns suitable for loading into SQL"""
+    def get_df_data_cols(self, df: pd.DataFrame, df_col: pd.DataFrame) -> List:
+        """Get list of columns suitable for loading into SQL.  Drop any null values."""
         sub_ser = df[df_col]
-        times = sub_ser.index.values.apply(
-            lambda x: x.isoformat()
-        )  # get list of strings.
+        sub_ser = sub_ser[sub_ser == sub_ser]
+        times = sub_ser.index.map(
+            lambda x: x.isoformat(timespec="seconds")  # .replace('T', ' ')
+        ).values.tolist()  # get list of strings.
         data_vals = sub_ser.values.tolist()
         return list(zip(times, data_vals))
 
@@ -529,7 +541,7 @@ class SQLDriver:
         sql_comm += (
             f"ON CONFLICT ({unique_str}) DO UPDATE SET {val_col}=EXCLUDED.{val_col};"
         )
-        # self.execute_with_rollback(sql_comm)
+        self.execute_with_rollback(sql_comm)
         return sql_comm
 
     def drop_table(self, table_name: str, force: bool = False):
@@ -572,6 +584,8 @@ def format_insert_str(data: List, st_type_list: List) -> str:
             # just remove quotes.
             st0 = st.replace("'", "").replace('"', "")
             out_str += f"'{st0}'"
+        elif st_type == SQLVar.timestamptz:
+            out_str += f"'{st}'"
         else:
             out_str += f"{st}"
         if i < Ncol - 1:
