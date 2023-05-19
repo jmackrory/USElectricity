@@ -13,3 +13,5 @@ repos:
     rev: v1.3.0
     hooks:
     -   id: mypy
+        additional_dependencies: [types-tensorflow==2.11.0,
+        data-science-types, types-requests]

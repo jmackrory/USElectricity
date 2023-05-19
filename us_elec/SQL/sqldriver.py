@@ -3,7 +3,7 @@ import json
 import os
 import random
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 import subprocess
 import jsonlines
 
@@ -28,7 +28,7 @@ class SQLVar:
     int = "integer"
     float = "float"
     str = "string"
-    timestamp = "timestamp"
+    timestamptz = "timestamp with time zone"
 
 
 class EBAName:
@@ -36,7 +36,7 @@ class EBAName:
     DEMAND = "demand"
     DEMAND_FORECAST = "demand_forecast"
     NET_GENERATION = "net_generation"
-    INTERCHANGE = "interchange"
+    INTERCHANGE = "EBA_interchange"
 
 
 class ColName:
@@ -67,7 +67,7 @@ class EBAGenAbbr:
 
 
 class ISDName:
-    ISD = "isd"
+    ISD = "ISD"
     TEMPERATURE = "temperature"
     WIND_DIR = "wind_dir"
     WIND_SPEED = "wind_speed"
@@ -85,8 +85,6 @@ class ISDDFName:
     CLOUD_COVER = "CloudCover"
     PRECIP_1HR = "Precip-1hr"
     PRECIP_6HR = "Precip-6hr"
-
-    lookup = {}
 
 
 ISD_COLS = [
@@ -151,7 +149,7 @@ class EBAMeta:
 
     def load_metadata(self) -> pd.DataFrame:
         meta_df = pd.read_json(self.meta_file, lines=True)
-        return meta_df
+        return pd.DataFrame(meta_df)
 
     def parse_metadata(self, df: pd.DataFrame) -> Dict:
         """Grab names, abbreviations and category ids and save to dict"""
@@ -185,14 +183,28 @@ class EBAMeta:
     def create_tables(self):
         """Create all relevant Tables for EBA data"""
         sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.EBA}
-            ({ColName.TS} timestamp,
+            ({ColName.TS} timestamp with time zone,
             {ColName.SOURCE} varchar(4),
             {ColName.MEASURE} varchar(20),
             {ColName.VAL} float);"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
         sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.INTERCHANGE}
-            ({ColName.TS} timestamp, {ColName.SOURCE} varchar(4), {ColName.DEST} varchar(4), {ColName.VAL} float);"""
+            ({ColName.TS} timestamp with time zone,
+            {ColName.SOURCE} varchar(4),
+            {ColName.DEST} varchar(4),
+            {ColName.VAL} float);"""
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
+    def create_indexes(self):
+        """Create all relevant Tables for EBA data"""
+
+        sql_comm = f"""CREATE INDEX ix_{EBAName.EBA} ON {EBAName.EBA}
+        ({ColName.TS}, {ColName.MEASURE}, {ColName.SOURCE});"""
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
+        sql_comm = f"""CREATE INDEX ix_{EBAName.INTERCHANGE} ON {EBAName.INTERCHANGE}
+        ({ColName.TS}, {ColName.SOURCE}, {ColName.DEST});"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
     def drop_tables(self, execute=False):
@@ -200,7 +212,7 @@ class EBAMeta:
         execute=False means only print commands.
         execute=True will execute!
         """
-        for table_name, _ in self.EBA_TABLES:
+        for table_name in [EBAName.EBA, EBAName.INTERCHANGE]:
             sql_comm = f"DROP TABLE IF EXISTS {table_name};"
             print(sql_comm)
             if execute is True:
@@ -343,18 +355,18 @@ class ISDMeta:
         self.sqldr.insert_data(ISDName.META, data_strings, col_list=col_names)
         return data_strings[:5]
 
-    def create_isd_tables(self):
+    def create_tables(self):
         """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
         sql_comm = f"""
         CREATE TABLE IF NOT EXISTS {ISDName.ISD}
-            ({ColName.TS} timestamp,
+            ({ColName.TS} timestamp with time zone,
             {ColName.CALL} char(4),
             {ColName.MEASURE} varchar(20),
             {ColName.VAL} float);
         """
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
-    def create_isd_indexes(self):
+    def create_indexes(self):
         """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
         sql_comm = f"CREATE INDEX ix_{ISDName.ISD} ON {ISDName.ISD} ({ColName.TS}, {ColName.MEASURE}, {ColName.CALL});"
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
@@ -376,12 +388,12 @@ class ISDMeta:
     #     # How to handle bulk update? temp table with update?
     #     return " ".join(str_list)
 
-    def drop_isd_tables(self, execute=False):
+    def drop_tables(self, execute=False):
         """Drop the tables!  Only sould be used when cleaning up setup.
         execute is not True means only print commands.
         execute = True will execute, and drop the table!
         """
-        for table_name, _, _ in self.ISD_TABLES:
+        for table_name in [ISDName.ISD]:
             sql_comm = f"DROP TABLE IF EXISTS {table_name};"
             print(sql_comm)
             if execute is True:
@@ -404,7 +416,7 @@ class ISDMeta:
 
     def load_data(self, Nst=-1, Nmax=-1):
         """Load data for each station by year and insert desired data into columns of relevant tables.
-        Tables / Columns governed by ISD_TABLES
+        Tables / Columns governed by ISD_TABLES.  Converts all data timestamps appropriately to UTC.
         Each table has columns for each callsign.
         """
         files = self.get_isd_filenames()[:Nst]
@@ -414,7 +426,7 @@ class ISDMeta:
             df = load_isd_df(file, tzstr)
             for measure, df_col in self.ISD_TABLES:
                 data = self.get_df_data_cols(df, df_col, tzstr)[:Nmax]
-                data_types = (SQLVar.timestamp, SQLVar.str, SQLVar.str, SQLVar.float)
+                data_types = (SQLVar.timestamptz, SQLVar.str, SQLVar.str, SQLVar.float)
                 cols = [ColName.TS, ColName.CALL, ColName.MEASURE, ColName.VAL]
                 unique_list = [ColName.TS, ColName.CALL, ColName.MEASURE]
                 data = [(x[0], callsign, measure, x[1]) for x in data]

@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
-FTP_CONNECTIONS = {}
+# FTP_CONNECTIONS = {}
 FTP_NOAA = "ftp.ncdc.noaa.gov"
 
 # #Get API keys from JSON file
@@ -215,7 +215,7 @@ def wget_data(USAF, WBAN, yearstr, city, airport):
         response = urllib.request.urlopen(req)
         with open(local_filepath, "wb") as f:
             f.write(response.read())
-    except URLError as err:
+    except urllib.error.URLError as err:
         print("\n could not download data from city:", city, airport)
         print(err.reason)
     return None
@@ -258,7 +258,7 @@ def ftp_download_data(ftp, USAF, WBAN, yearstr, city, airport):
             ftp.retrbinary(f"RETR {file_name}", fp.write)
         except Exception as e:
             print(f"Couldn't find info for {city} {airport} {file_name}")
-
+            print(e)
     return None
 
 
@@ -283,11 +283,11 @@ def get_all_data_ftp(aircode, start_year=2015, end_year=2020):
     aircode: datafram containing airport codes, NOAA station numbers, airports
     years: array of strings for the years to seek data.
     """
-    Nc = len(aircode)
+    # Nc = len(aircode)
     ftp = get_noaa_ftp_conn()
     for year in range(start_year, end_year):
         yearstr = str(year)
-        s = ftp.cwd(f"/pub/data/noaa/isd-lite/{yearstr}")
+        ftp.cwd(f"/pub/data/noaa/isd-lite/{yearstr}")
         for i in tqdm(range(len(aircode))):
             ap = aircode.iloc[i]
             usaf = ap["USAF"]
@@ -307,12 +307,12 @@ def get_missing_data_ftp(aircode, start_year=2015, end_year=2020):
     aircode: datafram containing airport codes, NOAA station numbers, airports
     years: array of strings for the years to seek data.
     """
-    Nc = len(aircode)
+    # Nc = len(aircode)
     found_count = 0
     ftp = get_noaa_ftp_conn()
     for year in range(start_year, end_year):
         yearstr = str(year)
-        s = ftp.cwd(f"/pub/data/noaa/isd-lite/{yearstr}")
+        ftp.cwd(f"/pub/data/noaa/isd-lite/{yearstr}")
         for i in tqdm(range(len(aircode))):
             ap = aircode.iloc[i]
             usaf = ap["USAF"]
@@ -362,6 +362,7 @@ def http_download_data(USAF, WBAN, yearstr, city, airport):
 
     except Exception as e:
         print(f"Couldn't find info for {city} {airport} {local_filepath}")
+        print(e)
 
     return local_filepath
 
@@ -391,9 +392,9 @@ def get_all_data_http(aircode, start_year=2015, end_year=2020):
     aircode: datafram containing airport codes, NOAA station numbers, airports
     years: array of strings for the years to seek data.
     """
-    Nc = len(aircode)
+    # Nc = len(aircode)
     for year in range(start_year, end_year):
-        yearstr = str(year)
+        # yearstr = str(year)
         for i in tqdm(range(len(aircode))):
             ap = aircode.iloc[i]
             usaf = ap["USAF"]
@@ -503,7 +504,7 @@ def convert_state_isd(air_df, ST):
     convert the weather files for a particular state into
     one big data frame.
     """
-    data_dir = "data/ISD/"
+    # data_dir = "data/ISD/"
     Tindex = pd.date_range(start=START_YR_MONTH, end=END_YR_MONTH, freq="h")
     df_tot = pd.DataFrame(index=Tindex)
     # select out only the entries for the desired state.
@@ -529,13 +530,13 @@ def convert_all_isd(air_df):
     convert all the weather files for all stations and all years into
     one big data frame.
     """
-    data_dir = "data/ISD/"
+    # data_dir = "data/ISD/"
     Tindex = pd.DatetimeIndex(start=START_YR_MONTH, end=END_YR_MONTH, freq="h")
     df_tot = pd.DataFrame(index=Tindex)
     nmax = len(air_df)
     for i in range(nmax):
         for yearstr in range(START_YR, END_YR):
-            #yearstr = year
+            # yearstr = year
             ap = air_df.iloc[i]
             usaf = ap["USAF"]
             wban = ap["WBAN"]
@@ -552,7 +553,9 @@ def convert_all_isd(air_df):
 if __name__ == "__main__":
     try:
         air_df = pd.read_csv("/tf/data/air_code_df.gz")
-    except:
+    except Exception as e:
+        print("Didnt find prexisting air_code_df.  Computing directly.")
+        print(e)
         airport_codes = make_airport_df()
         isd_names = read_isd_df()
         air_df = merge_air_isd(airport_codes, isd_names)

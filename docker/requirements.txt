@@ -9,7 +9,6 @@ ipdb
 ipykernel >= 6.0.0
 tzfpy
 geos
-tqdm
 shapely==1.8.0
 pyshp==2.3.1
 cartopy==0.21.1
