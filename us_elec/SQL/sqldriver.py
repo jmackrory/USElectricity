@@ -255,12 +255,13 @@ class EBAMeta:
                     cols = ["ts", "source", "dest", "value"]
                     col_types = [SQLVar.timestamp, SQLVar.str, SQLVar.str, SQLVar.float]
                     unique_list = ["ts", "source", "dest"]
+                    data_list = [(x[0], source, dest, x[1]) for x in dat["data"]]
                 else:
                     table_name = EBAName.INTERCHANGE
                     cols = ["ts", "source", "measure", "value"]
                     col_types = [SQLVar.timestamp, SQLVar.str, SQLVar.str, SQLVar.float]
                     unique_list = ["ts", "source", "measure"]
-                data_list = [(x[0], source, dest, x[1]) for x in dat["data"]]
+                    data_list = [(x[0], source, tag, x[1]) for x in dat["data"]]
                 self.sqldr.upsert_data_column(
                     table_name, cols, col_types, data_list, unique_list
                 )
@@ -346,7 +347,10 @@ class ISDMeta:
         """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
         sql_comm = f"""
         CREATE TABLE IF NOT EXISTS {ISDName.ISD}
-            ({ColName.TS} timestamp, {ColName.CALL} char(4), {ColName.MEASURE} varchar(20), {ColName.VAL} float);
+            ({ColName.TS} timestamp,
+            {ColName.CALL} char(4),
+            {ColName.MEASURE} varchar(20),
+            {ColName.VAL} float);
         """
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
@@ -408,11 +412,15 @@ class ISDMeta:
         out_sql = []
         for file, callsign, tzstr in files:
             df = load_isd_df(file, tzstr)
-            for sql_table, data_type, df_col in self.ISD_TABLES:
+            for measure, df_col in self.ISD_TABLES:
                 data = self.get_df_data_cols(df, df_col, tzstr)[:Nmax]
-                data_types = ("datetime", data_type)
-                cols = ["ts", callsign]
-                s_c = self.sqldr.upsert_data_column(sql_table, cols, data_types, data)
+                data_types = (SQLVar.timestamp, SQLVar.str, SQLVar.str, SQLVar.float)
+                cols = [ColName.TS, ColName.CALL, ColName.MEASURE, ColName.VAL]
+                unique_list = [ColName.TS, ColName.CALL, ColName.MEASURE]
+                data = [(x[0], callsign, measure, x[1]) for x in data]
+                s_c = self.sqldr.upsert_data_column(
+                    ISDName.ISD, cols, data_types, data, unique_list
+                )
                 out_sql.append(s_c)
         return out_sql
 
@@ -489,18 +497,25 @@ class SQLDriver:
         return sql_com
 
     def upsert_data_column(
-        self, table_name: str, cols: List[str], col_types: List[str], data: List[List]
+        self,
+        table_name: str,
+        col_list: List[str],
+        col_types: List[str],
+        unique_list: List[str],
+        val_col: str,
+        data: List[List],
     ) -> str:
         """Upsert Data
 
         Update columns with existing initial columns, and otherwise insert row.
         Useful for loading in column by column for wide tables.
         """
-        col_str = ",".join(cols)
+        col_str = ",".join(col_list)
+        unique_str = ",".join(unique_list)
         sql_comm = f"INSERT INTO {table_name}({col_str}) VALUES"
         sql_comm += ",\n".join([format_insert_str(D, col_types) for D in data])
         sql_comm += (
-            f"ON CONFLICT ({cols[0]}) DO UPDATE SET {cols[1]}=EXCLUDED.{cols[1]};"
+            f"ON CONFLICT ({unique_str}) DO UPDATE SET {val_col}=EXCLUDED.{val_col};"
         )
         # self.execute_with_rollback(sql_comm)
         return sql_comm
