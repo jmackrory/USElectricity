@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "us_elec"
+name = "uselec"
 version = "0.2"
 authors = [
     {name = "J Mackrory"}
@@ -15,5 +15,5 @@ dependencies = [
     'numpy',
     'pandas',
     'tensorflow',
-    'psycopg2',
+    'psycopg2-binary',
 ]

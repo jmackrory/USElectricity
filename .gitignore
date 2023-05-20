@@ -7,3 +7,4 @@ data/*
 .vscode
 .mypy*
 .history
+*egg-info

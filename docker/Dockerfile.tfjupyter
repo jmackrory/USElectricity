@@ -38,10 +38,10 @@ RUN make install
 #RUN /usr/bin/python3 -m pip install --upgrade pip
 
 COPY docker/requirements.txt /home/requirements.txt
-RUN pip install -r /home/requirements.txt
+RUN pip install --upgrade -r /home/requirements.txt
 
-COPY us_elec /home/us_elec
-WORKDIR /home/us_elec
+COPY src /home/src
+WORKDIR /home/src
 RUN pip install -e .
 
 COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
