@@ -41,9 +41,8 @@ services:
     volumes:
       - ../data:/tf/data
       - ../notebooks:/tf/notebooks
-      - ../markdown:/tf/markdown
       - ../scripts:/tf/scripts
-      - ../src:/home/src
+      - ../uselec_module:/home/uselec_module
       - ../.jupyter:/root/.jupyter
     ports:
       - 8890:8888

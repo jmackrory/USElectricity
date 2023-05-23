@@ -40,8 +40,8 @@ RUN make install
 COPY docker/requirements.txt /home/requirements.txt
 RUN pip install --upgrade -r /home/requirements.txt
 
-COPY src /home/src
-WORKDIR /home/src
+COPY uselec_module /home/uselec_module
+WORKDIR /home/uselec_module
 RUN pip install -e .
 
 COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
