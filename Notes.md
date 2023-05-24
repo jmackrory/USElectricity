@@ -47,7 +47,9 @@ Clear the Remote Server List.
 - Renamed library to USElectricity for giggles.
 - "pip install -e ." seems to work, but importing fails, and not found in pip list.  (possible setuptools bugs?)
    - Good discussion in here: https://stackoverflow.com/questions/29905909/pip-install-e-packages-dont-appear-in-docker about interaction of pip install and docker sync conflicting.
-
+   Fix suggested of doing something like
+   `pip install -e . --src /path/to/src`
+   from the module directory works.
 - created local virtual_env on host machine to install to allow better editting experience with VSCode.
 
 ## Mar 16
