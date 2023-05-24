@@ -40,9 +40,10 @@ RUN make install
 COPY docker/requirements.txt /home/requirements.txt
 RUN pip install --upgrade -r /home/requirements.txt
 
+# Install module code in editable form
 COPY uselec_module /home/uselec_module
 WORKDIR /home/uselec_module
-RUN pip install -e .
+RUN pip install -e . --src /home/edit-src
 
 COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
 COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_config.py
@@ -51,7 +52,7 @@ RUN export JUPYTER_CONFIG_DIR=/tf/.jupyter
 
 RUN export PYTHON_PATH="$PYTHON_PATH:/tf"
 
-RUN mkdir /tf/us_elec
+#RUN mkdir /tf/us_elec
 WORKDIR /tf
 
 CMD ["/usr/local/bin/jupyter", \

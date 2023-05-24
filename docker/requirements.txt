@@ -18,4 +18,4 @@ psycopg2-binary
 jsonlines
 xarray
 cfgrib==0.9.10.3
-setuptools
+setuptools<60

@@ -302,6 +302,9 @@ class ISDMeta:
             (ISDName.PRECIP_1HR, ISDDFName.PRECIP_1HR),
         ]
 
+    def dummy_method(self):
+        print("changed it more! in dummy")
+
     def get_air_meta_df(self) -> pd.DataFrame:
         air_df = pd.read_csv(self.meta_file, index_col=0)
         return air_df

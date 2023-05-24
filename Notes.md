@@ -4,8 +4,8 @@
 - Includes daily changes.
 
 ## Motivation for Docker
-- Maintaining the tensorflow environment was a pain, and finicky.  Working with Docker makes it more portable,
- and reproduceable, albeit at the cost of working with Docker which has it's own finickyness.
+- Maintaining the tensorflow environment was a pain, and finicky.  The now suggest using Docker.  And Working with Docker makes it more portable,
+ and reproduceable, albeit at the cost of working with Docker which has it's own finickyness.  This also helps with the databases, since there is less concern about affecting other DBs on the personal machine.
 
 
 ## Running Docker setup
@@ -32,12 +32,23 @@ May also need to change `.env` `TF_IMAGE` to use a `-gpu-jupyter` image.
 - Use Jupyter plugin to log in to remote `localhost:8890`.  Note that it may be necessary to
 Clear the Remote Server List.
 - It's also important to make sure you select the Docker container environment kernel, as otherwise it will run in the local environment.
+- Best to have the Jupyter Dockerfile running before trying to use the VSCode jupyter notebook as it tries to login immediately.
 
 ### Emacs IPython Notebok
 
 - `Ctrl-c Ctrl-x`
 - `ein: notebooklist-login`
 - Provide port 8890, then password.
+
+## May 23
+- Moved library code around to src layout with setup.cfg
+  (Motivated by need to allow scripts using library code to run and import code)
+  Gave up on pyproject.toml as editable support is annoying.
+- Renamed library to USElectricity for giggles.
+- "pip install -e ." seems to work, but importing fails, and not found in pip list.  (possible setuptools bugs?)
+   - Good discussion in here: https://stackoverflow.com/questions/29905909/pip-install-e-packages-dont-appear-in-docker about interaction of pip install and docker sync conflicting.
+
+- created local virtual_env on host machine to install to allow better editting experience with VSCode.
 
 ## Mar 16
 
@@ -49,7 +60,7 @@ picked up by docker-compose.
 But, that has specific requirements for GPU, which fail if not
 present.
 
-So, will make two docker-compose files.  
+So, will make two docker-compose files.
 
 ## Mar 9/10
 
