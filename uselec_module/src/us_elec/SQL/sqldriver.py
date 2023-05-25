@@ -369,10 +369,12 @@ class ISDMeta:
             ({ColName.TS} timestamp with time zone,
             {ColName.CALL} char(4),
             {ColName.MEASURE} varchar(20),
-            {ColName.VAL} float,
-            UNIQUE ({ColName.TS}, {ColName.CALL}, {ColName.MEASURE})
+            {ColName.VAL} float
             );
         """
+        # Will slow down insert.  Can add index later
+        # removed: UNIQUE ({ColName.TS}, {ColName.CALL}, {ColName.MEASURE})
+
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
     def create_indexes(self):
@@ -409,45 +411,57 @@ class ISDMeta:
                 print(f"Dropping table {table_name}!")
                 self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
+    def drop_indexes(self):
+        """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
+        sql_comm = f"DROP INDEX IF EXISTS ix_{ISDName.ISD};"
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
     def get_isd_filenames(self):
-        """Use ISD Meta table to build up known"""
+        """Use ISD Meta table to build up known file list"""
         wban_usaf_list = self.sqldr.get_data(
-            f"SELECT USAF, WBAN, CALLSIGN, LAT, LNG FROM {ISDName.META}"
+            f"SELECT USAF, WBAN, CALLSIGN FROM {ISDName.META}"
         )
         file_list = []
-        for usaf, wban, callsign, lat, lng in wban_usaf_list:
+        for usaf, wban, callsign in wban_usaf_list:
             for year in YEARS:
                 filename = get_local_isd_path(str(year), usaf, wban)
+                # don't actually need tz, since already in utc time
                 if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                    tzstr = get_tz(lng, lat)
-                    file_list.append((filename, callsign, tzstr))
+                    #    tzstr = get_tz(lng, lat)
+                    file_list.append((filename, callsign))
         return file_list
 
-    def load_data(self, Nst=-1, Nmax=-1):
+    def load_data(self, Nstation=-1, Ntime=-1, bulk=True, update=False):
         """Load data for each station by year and insert desired data into columns of relevant tables.
         Tables / Columns governed by ISD_TABLES.  Converts all data timestamps appropriately to UTC.
         Each table has columns for each callsign.
         """
-        files = self.get_isd_filenames()[:Nst]
+        files = self.get_isd_filenames()[:Nstation]
 
         # out_sql = []
-        for file, callsign, tzstr in tqdm(files):
-            df = load_isd_df(file, tzstr)
+        for file, callsign in tqdm(files):
+            df = load_isd_df(file)
             for measure, df_col in self.ISD_MEASURES:
-                data = self.get_df_data_cols(df, df_col)[:Nmax]
-                data_types = (SQLVar.timestamptz, SQLVar.str, SQLVar.str, SQLVar.float)
+                data = self.get_df_data_cols(df, df_col)[:Ntime]
+                # data_types = (SQLVar.timestamptz, SQLVar.str, SQLVar.str, SQLVar.float)
                 cols = [ColName.TS, ColName.CALL, ColName.MEASURE, ColName.VAL]
                 unique_list = [ColName.TS, ColName.CALL, ColName.MEASURE]
-                data = [(x[0], callsign, measure, x[1]) for x in data]
-                s_c = self.sqldr.upsert_data_column(
+                # try moving string formating here.
+                # data = [(x[0], callsign, measure, x[1]) for x in data]
+                data = [f"('{x[0]}', '{callsign}', '{measure}', {x[1]})" for x in data]
+                self.sqldr.insert_data_column(
                     table_name=ISDName.ISD,
                     col_list=cols,
-                    col_types=data_types,
+                    # col_types=data_types,
                     data=data,
                     unique_list=unique_list,
                     val_col=ColName.VAL,
+                    bulk=bulk,
+                    update=update,
                 )
                 # out_sql.append(s_c)
+        if bulk:
+            self.sqldr.commit()
         # return out_sql
 
     def get_df_data_cols(self, df: pd.DataFrame, df_col: pd.DataFrame) -> List:
@@ -456,7 +470,8 @@ class ISDMeta:
         sub_ser = sub_ser[sub_ser == sub_ser]
         times = sub_ser.index.map(
             lambda x: x.isoformat(timespec="seconds")  # .replace('T', ' ')
-        ).values.tolist()  # get list of strings.
+        ).values
+        times = times.tolist()  # get list of strings.
         data_vals = sub_ser.values.tolist()
         return list(zip(times, data_vals))
 
@@ -489,14 +504,20 @@ class SQLDriver:
             cur.execute("ROLLBACK")
             self.conn.commit()
 
-    def execute_with_rollback(self, sql_com: str, verbose: bool = False):
+    def commit(self):
+        self.conn.commit()
+
+    def execute_with_rollback(
+        self, sql_com: str, verbose: bool = False, bulk: bool = False
+    ):
         """Execute SQL command with rollback on exception."""
         try:
             if verbose:
                 print(sql_com)
             with self.conn.cursor() as cur:
                 rv = cur.execute(sql_com)
-            self.conn.commit()
+            if not bulk:
+                self.conn.commit()
         except Exception as e:
             print("Exception raised!")
             print(repr(e))
@@ -523,28 +544,32 @@ class SQLDriver:
         sql_com += ";"
         return sql_com
 
-    def upsert_data_column(
+    def insert_data_column(
         self,
         table_name: str,
         col_list: List[str],
-        col_types: List[str],
+        # col_types: List[str],
         unique_list: List[str],
         val_col: str,
-        data: List[List],
+        data: List[str],
+        update: bool = False,
+        bulk: bool = False,
     ) -> str:
         """Upsert Data
 
         Update columns with existing initial columns, and otherwise insert row.
-        Useful for loading in column by column for wide tables.
+        Useful for loading in column by column for wide tables, or when refreshing.
         """
         col_str = ",".join(col_list)
-        unique_str = ",".join(unique_list)
         sql_comm = f"INSERT INTO {table_name}({col_str}) VALUES"
-        sql_comm += ",\n".join([format_insert_str(D, col_types) for D in data])
-        sql_comm += (
-            f"ON CONFLICT ({unique_str}) DO UPDATE SET {val_col}=EXCLUDED.{val_col};"
-        )
-        self.execute_with_rollback(sql_comm)
+        # sql_comm += ",\n".join([format_insert_str2(D, col_types) for D in data])
+        sql_comm += ",".join(data)
+        if update:
+            unique_str = ",".join(unique_list)
+            sql_comm += f"ON CONFLICT ({unique_str}) DO UPDATE SET {val_col}=EXCLUDED.{val_col};"
+        else:
+            sql_comm += ";"
+        self.execute_with_rollback(sql_comm, bulk=bulk)
         return sql_comm
 
     def drop_table(self, table_name: str, force: bool = False):
@@ -578,7 +603,13 @@ class SQLDriver:
 
 
 def format_insert_str(data: List, st_type_list: List) -> str:
-    """Create insert string for inserting data record into SQL"""
+    """Create insert string for inserting data record into SQL
+    Converts each entry in data into a record to insert.
+    Takes data = [["1992/01/01 12:00:00", "kblah", "temperature", 1],...]
+          st_type_list = [datetime, str, str, float]
+    And spits out a big string.
+
+    """
     out_str = "("
     Ncol = len(st_type_list)
     for i, st in enumerate(data):
@@ -597,4 +628,28 @@ def format_insert_str(data: List, st_type_list: List) -> str:
     return out_str
 
 
-# Going to stick to assumption that inserting code handles proper conversion.
+def format_insert_str2(data: List, st_type_list: List) -> str:
+    """Create insert string for inserting data record into SQL
+    Converts each entry in data into a record to insert.
+    Takes data = [["1992/01/01 12:00:00", "kblah", "temperature", 1],...]
+          st_type_list = [datetime, str, str, float]
+    And spits out a big string:
+    `('1992/01/01 12:00:00', 'kblah', 'temperature', 1)`
+    """
+    out_str = "("
+    out_strs = [format_sub_str(st, st_type_list[i]) for i, st in enumerate(data)]
+    out_str += ",".join(out_strs)
+    out_str += ")"
+    return out_str
+
+
+def format_sub_str(st, st_type):
+    if st_type == SQLVar.str:
+        # just remove quotes.
+        st0 = st.replace("'", "").replace('"', "")
+        out_str = f"'{st0}'"
+    elif st_type == SQLVar.timestamptz:
+        out_str = f"'{st}'"
+    else:
+        out_str = str(st)
+    return out_str

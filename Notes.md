@@ -27,14 +27,21 @@ For GPU support change `docker-compose.yml` to
 `docker-compose.gpu.yml`
 May also need to change `.env` `TF_IMAGE` to use a `-gpu-jupyter` image.
 
+To run shell:
+`docker compose -f docker/docker-compose.yml run tfjupyter /bin/bash`
 
-#### VS Code
+Note: gpu version in `docker-compose.gpu.yml` with container `tfjupyter-gpu`
+
+#### VS Code and Jupyer
+- Best to have the Jupyter Dockerfile running before trying to use the VSCode jupyter notebook as it tries to login immediately if a notebook was previously open.
+  (Otherwise it will fail to login, and you have to force it to log-in again.)
 - Use Jupyter plugin to log in to remote `localhost:8890`.  Note that it may be necessary to
 Clear the Remote Server List.
 - It's also important to make sure you select the Docker container environment kernel, as otherwise it will run in the local environment.
-- Best to have the Jupyter Dockerfile running before trying to use the VSCode jupyter notebook as it tries to login immediately.
 
-### Emacs IPython Notebok
+### Emacs and Jupyter - Emacs IPython Notebook (EIN)
+
+Allows usage of Jupyter from within Emacs.  Useful when VSCode acting up, or browser shortcuts are annoying for code editing.
 
 - `Ctrl-c Ctrl-x`
 - `ein: notebooklist-login`

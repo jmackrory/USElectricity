@@ -78,5 +78,4 @@ Split roughly according to acquiring data, loading data, exploring data, and bui
 As of 2023, have migrated to using Docker particularly for using Tensorflow.
 Currently working to refactor library code into package to allow install with clearer simple scripts.  This should allow easier reproducibility, and portability for other projects.
 
-Dev environment is a modified Tensorflow/Jupyter docker container interacting
-with a PostgreSQL container.  Jupyter server runs inside container and is available for interactive running / debugging.
+Dev environment is a modified Tensorflow/Jupyter docker container interacting with a PostgreSQL container.  Jupyter server runs inside container and is available for interactive running / debugging.
