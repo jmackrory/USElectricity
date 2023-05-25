@@ -1,3 +1,5 @@
+# Timing note: Took 32 min single threaded for 600 stations, 3 variables, and 8 years (2015-2023)
+
 from argparse import ArgumentParser
 from us_elec.SQL.sqldriver import ISDMeta
 
@@ -10,13 +12,18 @@ def create_isd_tables_and_load_isd_data():
     args = parser.parse_args()
 
     isdm = ISDMeta()
+    if args.drop_tables is True:
+        print("Dropping ISD Tables!")
+        isdm.drop_tables(execute=True)
+        isdm.drop_indexes()
+    print("Creating and Populating Meta Table")
     isdm.create_isd_meta()
     isdm.populate_isd_meta()
-    if args.drop_tables is True:
-        isdm.drop_tables()
+    print("Creating ISD Table")
     isdm.create_tables()
-    isdm.create_indexes()
     isdm.load_data(Nstation=args.Nstation, Ntime=args.Ntime)
+    print("Creating Index")
+    isdm.create_indexes()
 
 
 if __name__ == "__main__":

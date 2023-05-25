@@ -1,4 +1,5 @@
 import csv
+import gzip
 import json
 import os
 import random
@@ -75,32 +76,62 @@ class ISDName:
     META = "air_meta"
 
 
-class ISDDFName:
-    TIME = "Time"
-    TEMPERATURE = "Temp"
-    DEW_TEMPERATURE = "DewTemp"
-    PRESSURE = "Pressure"
-    WIND_DIR = "WindDir"
-    WIND_SPEED = "WindSpeed"
-    CLOUD_COVER = "CloudCover"
-    PRECIP_1HR = "Precip-1hr"
-    PRECIP_6HR = "Precip-6hr"
+class ISDDF:
+    TIME = "time"
+    YEAR = ("year",)
+    MONTH = ("month",)
+    DAY = ("day",)
+    HOUR = ("hour",)
+    TEMPERATURE = "temp"
+    DEW_TEMPERATURE = "dew_temp"
+    PRESSURE = "pressure"
+    WIND_DIR = "wind_dir"
+    WIND_SPEED = "wind_spd"
+    CLOUD_COVER = "cloud_cov"
+    PRECIP_1HR = "precip_1hr"
+    PRECIP_6HR = "precip_6hr"
 
+    ISD_COLS = [
+        TIME,
+        TEMPERATURE,
+        DEW_TEMPERATURE,
+        PRESSURE,
+        WIND_DIR,
+        WIND_SPEED,
+        CLOUD_COVER,
+        PRECIP_1HR,
+        PRECIP_6HR,
+    ]
+    ind_name_lookup = {i: name for i, name in enumerate(ISD_COLS)}
+    name_ind_lookup = {name: i for i, name in ind_name_lookup.items()}
 
-ISD_COLS = [
-    "Year",
-    "Month",
-    "Day",
-    "Hour",
-    "Temp",
-    "DewTemp",
-    "Pressure",
-    "WindDir",
-    "WindSpeed",
-    "CloudCover",
-    "Precip-1hr",
-    "Precip-6hr",
-]
+    @classmethod
+    def load_fwf_isd_file(cls, filename: str) -> List[List]:
+        """Load ISD FWF datafile in directly.
+        Currently relying on space between entries.
+        """
+        with gzip.open(filename, "r") as gz:
+            lines = gz.readlines()
+            vals = [[cls.parse_val(x) for x in L.split()] for L in lines]
+            out_list = [cls.parse_times(V) for V in vals]
+        return out_list
+
+    @classmethod
+    def parse_val(cls, x, null_vals=[-999, -9999]):
+        ix = int(x)
+        return ix if ix not in null_vals else None
+
+    @classmethod
+    def parse_times(cls, V):
+        tstr = f"{V[0]}-{V[1]:02}-{V[2]:02}T{V[3]:02}:00:00"
+        out_list = [tstr] + V[4:]
+        return out_list
+
+    @classmethod
+    def get_cols(cls, cols: List[str], data_list: List[List]) -> List:
+        col_ind = [cls.name_ind_lookup[x] for x in cols]
+        out_data = [[x[i] for i in col_ind] for x in data_list]
+        return out_data
 
 
 ALLOWED_TYPES = [SQLVar.int, SQLVar.float]
@@ -296,10 +327,9 @@ class ISDMeta:
         self.sqldr = SQLDriver()
         self.ISD_TABLES = [ISDName.ISD]
         self.ISD_MEASURES = [
-            (ISDName.TEMPERATURE, ISDDFName.TEMPERATURE),
-            # (ISDName.WIND_DIR, ISDDFName.WIND_DIR),
-            (ISDName.WIND_SPEED, ISDDFName.WIND_SPEED),
-            (ISDName.PRECIP_1HR, ISDDFName.PRECIP_1HR),
+            ISDName.TEMPERATURE,
+            ISDName.WIND_SPEED,
+            ISDName.PRECIP_1HR,
         ]
 
     def dummy_method(self):
@@ -404,9 +434,8 @@ class ISDMeta:
         execute is not True means only print commands.
         execute = True will execute, and drop the table!
         """
-        for table_name in [ISDName.ISD]:
+        for table_name in [ISDName.ISD, ISDName.META]:
             sql_comm = f"DROP TABLE IF EXISTS {table_name};"
-            print(sql_comm)
             if execute is True:
                 print(f"Dropping table {table_name}!")
                 self.sqldr.execute_with_rollback(sql_comm, verbose=True)
@@ -425,13 +454,11 @@ class ISDMeta:
         for usaf, wban, callsign in wban_usaf_list:
             for year in YEARS:
                 filename = get_local_isd_path(str(year), usaf, wban)
-                # don't actually need tz, since already in utc time
                 if os.path.exists(filename) and os.path.getsize(filename) > 0:
-                    #    tzstr = get_tz(lng, lat)
                     file_list.append((filename, callsign))
         return file_list
 
-    def load_data(self, Nstation=-1, Ntime=-1, bulk=True, update=False):
+    def load_data(self, Nstation=-1, Ntime=-1, bulk=True, update=False, Ncommit=50):
         """Load data for each station by year and insert desired data into columns of relevant tables.
         Tables / Columns governed by ISD_TABLES.  Converts all data timestamps appropriately to UTC.
         Each table has columns for each callsign.
@@ -439,41 +466,36 @@ class ISDMeta:
         files = self.get_isd_filenames()[:Nstation]
 
         # out_sql = []
-        for file, callsign in tqdm(files):
-            df = load_isd_df(file)
-            for measure, df_col in self.ISD_MEASURES:
-                data = self.get_df_data_cols(df, df_col)[:Ntime]
-                # data_types = (SQLVar.timestamptz, SQLVar.str, SQLVar.str, SQLVar.float)
+        for file_count, (file, callsign) in enumerate(tqdm(files)):
+            # df = load_isd_df(file)
+            data_list = ISDDF.load_fwf_isd_file(file)
+            for measure in self.ISD_MEASURES:
+                cols = [ISDDF.TIME, measure]
+                sub_data = ISDDF.get_cols(cols, data_list)[:Ntime]
+                data = [
+                    self.get_data_insert_str(x, callsign, measure) for x in sub_data
+                ]
                 cols = [ColName.TS, ColName.CALL, ColName.MEASURE, ColName.VAL]
                 unique_list = [ColName.TS, ColName.CALL, ColName.MEASURE]
-                # try moving string formating here.
-                # data = [(x[0], callsign, measure, x[1]) for x in data]
-                data = [f"('{x[0]}', '{callsign}', '{measure}', {x[1]})" for x in data]
+
                 self.sqldr.insert_data_column(
                     table_name=ISDName.ISD,
                     col_list=cols,
-                    # col_types=data_types,
                     data=data,
                     unique_list=unique_list,
                     val_col=ColName.VAL,
                     bulk=bulk,
                     update=update,
                 )
-                # out_sql.append(s_c)
-        if bulk:
+        if file_count % Ncommit == 0 and bulk:
             self.sqldr.commit()
-        # return out_sql
 
-    def get_df_data_cols(self, df: pd.DataFrame, df_col: pd.DataFrame) -> List:
-        """Get list of columns suitable for loading into SQL.  Drop any null values."""
-        sub_ser = df[df_col]
-        sub_ser = sub_ser[sub_ser == sub_ser]
-        times = sub_ser.index.map(
-            lambda x: x.isoformat(timespec="seconds")  # .replace('T', ' ')
-        ).values
-        times = times.tolist()  # get list of strings.
-        data_vals = sub_ser.values.tolist()
-        return list(zip(times, data_vals))
+    @classmethod
+    def get_data_insert_str(cls, x, callsign, measure):
+        if x[1]:
+            return f"('{x[0]}', '{callsign}', '{measure}', {x[1]})"
+        else:
+            return f"('{x[0]}', '{callsign}', '{measure}', NULL)"
 
 
 class SQLDriver:
@@ -562,7 +584,6 @@ class SQLDriver:
         """
         col_str = ",".join(col_list)
         sql_comm = f"INSERT INTO {table_name}({col_str}) VALUES"
-        # sql_comm += ",\n".join([format_insert_str2(D, col_types) for D in data])
         sql_comm += ",".join(data)
         if update:
             unique_str = ",".join(unique_list)
@@ -625,31 +646,4 @@ def format_insert_str(data: List, st_type_list: List) -> str:
         if i < Ncol - 1:
             out_str += ", "
     out_str += ")"
-    return out_str
-
-
-def format_insert_str2(data: List, st_type_list: List) -> str:
-    """Create insert string for inserting data record into SQL
-    Converts each entry in data into a record to insert.
-    Takes data = [["1992/01/01 12:00:00", "kblah", "temperature", 1],...]
-          st_type_list = [datetime, str, str, float]
-    And spits out a big string:
-    `('1992/01/01 12:00:00', 'kblah', 'temperature', 1)`
-    """
-    out_str = "("
-    out_strs = [format_sub_str(st, st_type_list[i]) for i, st in enumerate(data)]
-    out_str += ",".join(out_strs)
-    out_str += ")"
-    return out_str
-
-
-def format_sub_str(st, st_type):
-    if st_type == SQLVar.str:
-        # just remove quotes.
-        st0 = st.replace("'", "").replace('"', "")
-        out_str = f"'{st0}'"
-    elif st_type == SQLVar.timestamptz:
-        out_str = f"'{st}'"
-    else:
-        out_str = str(st)
     return out_str

@@ -440,14 +440,14 @@ def load_isd_df(filename, tzstr=None):
         "month",
         "day",
         "hour",
-        "Temp",
-        "DewTemp",
-        "Pressure",
-        "WindDir",
-        "WindSpeed",
-        "CloudCover",
-        "Precip-1hr",
-        "Precip-6hr",
+        "temp",
+        "dew_temp",
+        "pressure",
+        "wind_dir",
+        "wind_spd",
+        "cloud_cov",
+        "precip_1hr",
+        "precip_6hr",
     ]
     df = pd.read_fwf(
         filename, compression="gzip", na_values=["-9999", "999"], names=col_names
