@@ -19,6 +19,7 @@ def create_isd_tables_and_load_isd_data():
     print("Creating and Populating Meta Table")
     isdm.create_isd_meta()
     isdm.populate_isd_meta()
+    isdm.populate_measures()
     print("Creating ISD Table")
     isdm.create_tables()
     isdm.load_data(Nstation=args.Nstation, Ntime=args.Ntime)

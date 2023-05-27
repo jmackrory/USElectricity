@@ -221,45 +221,45 @@ def wget_data(USAF, WBAN, yearstr, city, airport):
     return None
 
 
-def get_noaa_ftp_conn():
-    ftp = FTP(FTP_NOAA)
-    s = ftp.login()
-    print(s)
-    return ftp
+# def get_noaa_ftp_conn():
+#     ftp = FTP(FTP_NOAA)
+#     s = ftp.login()
+#     print(s)
+#     return ftp
 
 
-def close_ftp_conn(ftp):
-    ftp.quit()
+# def close_ftp_conn(ftp):
+#     ftp.quit()
 
 
 # now download the data from NOAA:
-def ftp_download_data(ftp, USAF, WBAN, yearstr, city, airport):
-    """ftp_download_data(USAF,WBAN,yearstr,city,airport)
-    Download automated weather station data from NOAA for a given year at a given airport.
+# def ftp_download_data(ftp, USAF, WBAN, yearstr, city, airport):
+#     """ftp_download_data(USAF,WBAN,yearstr,city,airport)
+#     Download automated weather station data from NOAA for a given year at a given airport.
 
-    USAF: USAF 6 digit code for airport.
-    WBAN: NOAA code for weather station at airport
-    yearstr: a string containing the 4 digit year.
-    city: city the airport is located in
-    airport: Name of the airport.
-    """
-    # url = base_url + file_name
-    # print(url)
-    # req = urllib.request.Request(url)
-    # response = urllib.request.urlopen(req)
-    # with open(local_filepath, 'wb') as f:
-    #     f.write(response.read())
+#     USAF: USAF 6 digit code for airport.
+#     WBAN: NOAA code for weather station at airport
+#     yearstr: a string containing the 4 digit year.
+#     city: city the airport is located in
+#     airport: Name of the airport.
+#     """
+#     # url = base_url + file_name
+#     # print(url)
+#     # req = urllib.request.Request(url)
+#     # response = urllib.request.urlopen(req)
+#     # with open(local_filepath, 'wb') as f:
+#     #     f.write(response.read())
 
-    local_filepath = get_local_isd_path(yearstr, USAF, WBAN)
-    with open(local_filepath, "wb") as fp:
-        file_name = isd_filename(yearstr, USAF, WBAN)
-        print(ftp.pwd())
-        try:
-            ftp.retrbinary(f"RETR {file_name}", fp.write)
-        except Exception as e:
-            print(f"Couldn't find info for {city} {airport} {file_name}")
-            print(e)
-    return None
+#     local_filepath = get_local_isd_path(yearstr, USAF, WBAN)
+#     with open(local_filepath, "wb") as fp:
+#         file_name = isd_filename(yearstr, USAF, WBAN)
+#         print(ftp.pwd())
+#         try:
+#             ftp.retrbinary(f"RETR {file_name}", fp.write)
+#         except Exception as e:
+#             print(f"Couldn't find info for {city} {airport} {file_name}")
+#             print(e)
+#     return None
 
 
 def isd_filename(yearstr, USAF, WBAN):
@@ -275,59 +275,59 @@ def get_local_isd_path(yearstr, usaf, wban):
     return os.path.join(DATA_PATH, "ISD", isd_filename(yearstr, usaf, wban))
 
 
-# download weather data for all of the airports specified in aircode
-def get_all_data_ftp(aircode, start_year=2015, end_year=2020):
-    """get_all_data(aircode, years=['2015', '2016', '2017'])
-    Download the data for all airports we could find weather stations for in desired cities.
+# # download weather data for all of the airports specified in aircode
+# def get_all_data_ftp(aircode, start_year=2015, end_year=2020):
+#     """get_all_data(aircode, years=['2015', '2016', '2017'])
+#     Download the data for all airports we could find weather stations for in desired cities.
 
-    aircode: datafram containing airport codes, NOAA station numbers, airports
-    years: array of strings for the years to seek data.
-    """
-    # Nc = len(aircode)
-    ftp = get_noaa_ftp_conn()
-    for year in range(start_year, end_year):
-        yearstr = str(year)
-        ftp.cwd(f"/pub/data/noaa/isd-lite/{yearstr}")
-        for i in tqdm(range(len(aircode))):
-            ap = aircode.iloc[i]
-            usaf = ap["USAF"]
-            wban = ap["WBAN"]
-            city = ap["City"]
-            airport = ap["name"]
-            ftp_download_data(ftp, usaf, wban, str(year), city, airport)
-            sleep(0.01)
-    close_ftp_conn(ftp)
-    return None
+#     aircode: datafram containing airport codes, NOAA station numbers, airports
+#     years: array of strings for the years to seek data.
+#     """
+#     # Nc = len(aircode)
+#     ftp = get_noaa_ftp_conn()
+#     for year in range(start_year, end_year):
+#         yearstr = str(year)
+#         ftp.cwd(f"/pub/data/noaa/isd-lite/{yearstr}")
+#         for i in tqdm(range(len(aircode))):
+#             ap = aircode.iloc[i]
+#             usaf = ap["USAF"]
+#             wban = ap["WBAN"]
+#             city = ap["City"]
+#             airport = ap["name"]
+#             ftp_download_data(ftp, usaf, wban, str(year), city, airport)
+#             sleep(0.01)
+#     close_ftp_conn(ftp)
+#     return None
 
 
-def get_missing_data_ftp(aircode, start_year=2015, end_year=2020):
-    """get_all_data(aircode, years=['2015', '2016', '2017'])
-    Download the data for all airports we could find weather stations for in desired cities.
+# def get_missing_data_ftp(aircode, start_year=2015, end_year=2020):
+#     """get_all_data(aircode, years=['2015', '2016', '2017'])
+#     Download the data for all airports we could find weather stations for in desired cities.
 
-    aircode: datafram containing airport codes, NOAA station numbers, airports
-    years: array of strings for the years to seek data.
-    """
-    # Nc = len(aircode)
-    found_count = 0
-    ftp = get_noaa_ftp_conn()
-    for year in range(start_year, end_year):
-        yearstr = str(year)
-        ftp.cwd(f"/pub/data/noaa/isd-lite/{yearstr}")
-        for i in tqdm(range(len(aircode))):
-            ap = aircode.iloc[i]
-            usaf = ap["USAF"]
-            wban = ap["WBAN"]
-            city = ap["City"]
-            airport = ap["name"]
-            fn = get_local_isd_path(year, usaf, wban)
-            if not os.path.exists(fn):
-                print(f"{fn} missing for {airport}")
-                ftp_download_data(ftp, usaf, wban, str(year), city, airport)
-            else:
-                found_count += 1
-    close_ftp_conn(ftp)
-    print(found_count)
-    return None
+#     aircode: datafram containing airport codes, NOAA station numbers, airports
+#     years: array of strings for the years to seek data.
+#     """
+#     # Nc = len(aircode)
+#     found_count = 0
+#     ftp = get_noaa_ftp_conn()
+#     for year in range(start_year, end_year):
+#         yearstr = str(year)
+#         ftp.cwd(f"/pub/data/noaa/isd-lite/{yearstr}")
+#         for i in tqdm(range(len(aircode))):
+#             ap = aircode.iloc[i]
+#             usaf = ap["USAF"]
+#             wban = ap["WBAN"]
+#             city = ap["City"]
+#             airport = ap["name"]
+#             fn = get_local_isd_path(year, usaf, wban)
+#             if not os.path.exists(fn):
+#                 print(f"{fn} missing for {airport}")
+#                 ftp_download_data(ftp, usaf, wban, str(year), city, airport)
+#             else:
+#                 found_count += 1
+#     close_ftp_conn(ftp)
+#     print(found_count)
+#     return None
 
 
 def get_http_isd_url(yearstr, USAF, WBAN):

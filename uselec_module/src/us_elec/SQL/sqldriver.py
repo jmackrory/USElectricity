@@ -1,22 +1,17 @@
-import csv
 import gzip
 import json
 import os
-import random
 import re
-from typing import Dict, List, Optional, Tuple, Union
-import subprocess
+from typing import Dict, List, Optional
 import jsonlines
 
 import psycopg2
-from tzfpy import get_tz
 import pandas as pd
 from tqdm import tqdm
 
 from functools import lru_cache
 
-# from us_elec.SQL.sql_query import eba_table_template, isd_table_template, insert_eba_data
-from us_elec.util.get_weather_data import get_local_isd_path, load_isd_df
+from us_elec.util.get_weather_data import get_local_isd_path
 
 
 class TableType:
@@ -32,21 +27,32 @@ class SQLVar:
     timestamptz = "timestamp with time zone"
 
 
-class EBAName:
-    EBA = "EBA"
-    DEMAND = "demand"
-    DEMAND_FORECAST = "demand_forecast"
-    NET_GENERATION = "net_generation"
-    INTERCHANGE = "EBA_interchange"
-
-
 class ColName:
+    # Column names used across tables
     TS = "ts"
+    ID = "id"
     SOURCE = "source"
+    SOURCE_ID = "source_id"
     CALL = "callsign"
+    CALL_ID = "callsign_id"
     MEASURE = "measure"
+    MEASURE_ID = "measure_id"
     DEST = "dest"
+    DEST_ID = "dest_id"
     VAL = "val"
+    FULL_NAME = "full_name"
+    ABBR = "abbr"
+
+
+class EBAName:
+    # Table names
+    EBA = "eba"
+    ISO_META = "eba_iso_meta"
+    MEASURE = "eba_measure"
+    # DEMAND = "demand"
+    # DEMAND_FORECAST = "demand_forecast"
+    # NET_GENERATION = "net_generation"
+    INTERCHANGE = "eba_interchange"
 
 
 class EBAAbbr:
@@ -59,24 +65,29 @@ class EBAAbbr:
 
 class EBAGenAbbr:
     COL = "Coal"
-    WND = "Wind"
     WAT = "Hydro"
-    SOL = "Solar"
-    NUC = "Nuclear"
     NG = "Natural Gas"
+    NUC = "Nuclear"
+    OIL = "Oil"
     OTH = "Other"
+    SUN = "Solar"
+    TOT = "Total"
+    WND = "Wind"
 
 
 class ISDName:
+    # ISD Table names
     ISD = "ISD"
-    TEMPERATURE = "temp"
-    WIND_DIR = "wind_dir"
-    WIND_SPEED = "wind_spd"
-    PRECIP_1HR = "precip_1hr"
-    META = "air_meta"
+    AIR_META = "air_meta"
+    MEASURE = "isd_measure"
+    # TEMPERATURE = "temp"
+    # WIND_DIR = "wind_dir"
+    # WIND_SPEED = "wind_spd"
+    # PRECIP_1HR = "precip_1hr"
 
 
 class ISDDF:
+    # ISD column names
     TIME = "time"
     YEAR = ("year",)
     MONTH = ("month",)
@@ -144,6 +155,10 @@ EBA_NAME_PATH = "./meta/iso_names.csv"
 YEARS = list(range(2015, 2024))
 
 
+def get_cls_attr_dict(cls):
+    return {k: v for k, v in cls.__dict__.items() if not k.startswith("__")}
+
+
 @lru_cache(1)
 def get_air_names(fn=AIR_SIGN_PATH):
     with open(fn, "r") as fp:
@@ -193,7 +208,6 @@ class EBAMeta:
                 if abbrv == abbrv.upper():
                     iso_map[abbrv] = name
 
-            # for ch in row.childseries
         return iso_map
 
     def save_iso_dict_json(self) -> str:
@@ -213,21 +227,37 @@ class EBAMeta:
 
     def create_tables(self):
         """Create all relevant Tables for EBA data"""
+        # eba table for demand/forecast/generation
         sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.EBA}
             ({ColName.TS} timestamp with time zone,
-            {ColName.SOURCE} varchar(4),
-            {ColName.MEASURE} varchar(20),
-            {ColName.VAL} float,
-            UNIQUE ({ColName.TS}, {ColName.SOURCE}, {ColName.MEASURE})
+            {ColName.SOURCE_ID} smallint,
+            {ColName.MEASURE_ID} smallint,
+            {ColName.VAL} float
             );"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
+        # interchange
         sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.INTERCHANGE}
             ({ColName.TS} timestamp with time zone,
-            {ColName.SOURCE} varchar(4),
-            {ColName.DEST} varchar(4),
-            {ColName.VAL} float,
-            UNIQUE ({ColName.TS}, {ColName.SOURCE}, {ColName.DEST})
+            {ColName.SOURCE_ID} smallint,
+            {ColName.DEST_ID} smallint,
+            {ColName.VAL} float
+            );"""
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
+        # source meta
+        sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.ISO_META}
+            (id SMALLSERIAL,
+            {ColName.FULL_NAME} varchar(100),
+            {ColName.ABBR} varchar(4) UNIQUE
+            );"""
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
+        # measure meta
+        sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.MEASURE}
+            (id SMALLSERIAL,
+            {ColName.FULL_NAME} varchar(100),
+            {ColName.ABBR} varchar(4) UNIQUE
             );"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
@@ -235,11 +265,11 @@ class EBAMeta:
         """Create all relevant Tables for EBA data"""
 
         sql_comm = f"""CREATE INDEX ix_{EBAName.EBA} ON {EBAName.EBA}
-        ({ColName.TS}, {ColName.MEASURE}, {ColName.SOURCE});"""
+        ({ColName.TS}, {ColName.MEASURE_ID}, {ColName.SOURCE_ID});"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
         sql_comm = f"""CREATE INDEX ix_{EBAName.INTERCHANGE} ON {EBAName.INTERCHANGE}
-        ({ColName.TS}, {ColName.SOURCE}, {ColName.DEST});"""
+        ({ColName.TS}, {ColName.SOURCE_ID}, {ColName.DEST_ID});"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
     def drop_tables(self, execute=False):
@@ -253,31 +283,53 @@ class EBAMeta:
             if execute is True:
                 self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
-    # def _get_create_eba_table_sql_wide(self, table_name: str, var_type: str) -> str:
-    #     """Get String SQL Command to create SQL table for EIA EBA data for ISOs."""
-    #     if var_type not in ALLOWED_TYPES:
-    #         raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
+    def populate_meta_tables(self):
+        iso_map = self.load_iso_dict_json()
 
-    #     str_list = [
-    #         f"CREATE TABLE IF NOT EXISTS {table_name} ",
-    #         "(",
-    #         "ts timestamp,",
-    #     ]
-    #     if table_name == EBAName.INTERCHANGE:
-    #         str_list += ["source varchar(4)," "dest varchar(4)," "val float)"]
-    #     else:
-    #         eba_names = self.load_iso_dict_json().keys()
-    #         many_str_list = [f"{eba} {var_type}" for eba in eba_names]
-    #         str_list += [", ".join(many_str_list)]
-    #         str_list += [") PRIMARY KEY ts;"]
-    #     return " ".join(str_list)
+        cols = [{ColName.ABBR}, {ColName.FULL_NAME}]
+        data_list = [(abbr, fullname) for abbr, fullname in iso_map.items()]
+        self.sqldr.insert_data_column(
+            table_name=EBAName.ISO_META,
+            cols=cols,
+            col_types=[SQLVar.str, SQLVar.str],
+            data_list=data_list,
+            unique_list=cols,
+            update=True,
+        )
+        eba_names = get_cls_attr_dict(EBAGenAbbr)
+        gen_names = get_cls_attr_dict(EBAAbbr)
+        data_list = [(abbr, fullname) for abbr, fullname in eba_names.items()]
+        data_list += [(abbr, fullname) for abbr, fullname in gen_names.items()]
+        self.sqldr.insert_data_column(
+            table_name=EBAName.MEASURE,
+            cols=cols,
+            col_types=[SQLVar.str, SQLVar.str],
+            data_list=data_list,
+            unique_list=cols,
+            update=True,
+        )
 
     def parse_eba_series_id(self, str):
         sub = str.split(".")[1:]  # drop the EBA
         source, dest = sub[0].split("-")
-        tag = sub[1:-1].join("-")
+        tags = sub[1:-1]
         time = sub[-1]
-        return source, dest, tag, time
+        return source, dest, tags, time
+
+    def read_metadata(self):
+        """Read in name / series_ids."""
+        # load files one by one.
+        # if in desired type, then insert.
+        # before insert, check if times exists.
+        # otherwise update based on time overlap.
+        out_list = []
+        # name_reg = re.compile(f'{name_lookup}') if name_lookup else None
+        with jsonlines.open(self.eba_filename, "r") as fh:
+            for dat in tqdm(fh):
+                if not dat.get("series_id") and not dat.get("data"):
+                    continue
+                out_list.append((dat["name"], dat["series_id"]))
+        return out_list
 
     def load_data(self):
         """Load in relevant data series.  Only keep the ones on UTC time."""
@@ -286,32 +338,60 @@ class EBAMeta:
         # before insert, check if times exists.
         # otherwise update based on time overlap.
 
-        int_str = re.compile("Actual Net Interchange")
-        utc_str = re.compile("UTC")
+        int_re = re.compile("Actual Net Interchange")
+        utc_re = re.compile("UTC")
 
         # name_reg = re.compile(f'{name_lookup}') if name_lookup else None
         with jsonlines.open(self.eba_filename, "r") as fh:
             for dat in tqdm(fh):
+                name = dat["name"]
                 if not dat["series_id"] and not dat["data"]:
                     continue
-                if utc_str not in dat["name"]:
+                if not utc_re.search(name):
                     continue
-                source, dest, tag, time = self.parse_eba_series_id(dat["series_id"])
-                if int_str in dat["name"]:
+                source, dest, tags, _ = self.parse_eba_series_id(dat["series_id"])
+                source_id = self.get_eba_source_id(source)
+                if int_re.search(name):
+                    dest_id = self.get_eba_source_id(dest)
                     table_name = EBAName.INTERCHANGE
-                    cols = ["ts", "source", "dest", "value"]
-                    col_types = [SQLVar.timestamp, SQLVar.str, SQLVar.str, SQLVar.float]
-                    unique_list = ["ts", "source", "dest"]
-                    data_list = [(x[0], source, dest, x[1]) for x in dat["data"]]
+                    cols = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID, ColName.VAL]
+                    col_types = [
+                        SQLVar.timestamptz,
+                        SQLVar.str,
+                        SQLVar.str,
+                        SQLVar.float,
+                    ]
+                    data_list = [(x[0], source_id, dest_id, x[1]) for x in dat["data"]]
                 else:
-                    table_name = EBAName.INTERCHANGE
-                    cols = ["ts", "source", "measure", "value"]
-                    col_types = [SQLVar.timestamp, SQLVar.str, SQLVar.str, SQLVar.float]
-                    unique_list = ["ts", "source", "measure"]
-                    data_list = [(x[0], source, tag, x[1]) for x in dat["data"]]
-                self.sqldr.upsert_data_column(
-                    table_name, cols, col_types, data_list, unique_list
+                    measure_id = self.get_eba_measure_id(tags[-1])
+                    table_name = EBAName.EBA
+                    cols = [
+                        ColName.TS,
+                        ColName.SOURCE_ID,
+                        ColName.MEASURE_ID,
+                        ColName.VAL,
+                    ]
+                    col_types = [
+                        SQLVar.timestamptz,
+                        SQLVar.int,
+                        SQLVar.int,
+                        SQLVar.float,
+                    ]
+                    # unique_list = ["ts", "source", "measure"]
+                    data_list = [
+                        (x[0], source_id, measure_id, x[1]) for x in dat["data"]
+                    ]
+                self.sqldr.insert_data_column(
+                    table_name, cols, col_types, data_list, update=False, bulk=True
                 )
+
+    def get_eba_source_id(self, source):
+        qry_str = f"SELECT id FROM {EBAName.ISO_META} WHERE {ColName.ABBR} = {source};"
+        return self.sqldr.get_data(qry_str)
+
+    def get_eba_measure_id(self, measure):
+        qry_str = f"SELECT id FROM {EBAName.MEASURE} WHERE {ColName.ABBR} = {measure};"
+        return self.sqldr.get_data(qry_str)
 
 
 class ISDMeta:
@@ -327,9 +407,9 @@ class ISDMeta:
         self.sqldr = SQLDriver()
         self.ISD_TABLES = [ISDName.ISD]
         self.ISD_MEASURES = [
-            ISDName.TEMPERATURE,
-            ISDName.WIND_SPEED,
-            ISDName.PRECIP_1HR,
+            ISDDF.TEMPERATURE,
+            ISDDF.WIND_SPEED,
+            ISDDF.PRECIP_1HR,
         ]
 
     def dummy_method(self):
@@ -350,13 +430,14 @@ class ISDMeta:
         return pd.read_csv(self.sign_file)["CALL"].tolist()
 
     def create_isd_meta(self):
-        air_meta_create = """
-        CREATE TABLE IF NOT EXISTS air_meta
+        # table for data about stations
+        air_meta_create = f"""
+        CREATE TABLE IF NOT EXISTS {ISDName.AIR_META}
         (id integer,
         name varchar(100),
         city varchar(100),
         state char(2),
-        callsign char(4),
+        callsign char(4) UNIQUE,
         usaf integer,
         wban integer,
         lat float,
@@ -367,8 +448,21 @@ class ISDMeta:
             cur.execute(air_meta_create)
             self.sqldr.conn.commit()
 
-    def populate_isd_meta(self) -> List:
-        """Populate SQL table with Airport metadata from Pandas DF"""
+        # data table to store measure names.
+        meta_table_create = f"""
+        CREATE TABLE IF NOT EXISTS {ISDName.MEASURE}
+        (id SMALLSERIAL,
+        measure varchar(20) UNIQUE
+        );
+        """
+        with self.sqldr.conn.cursor() as cur:
+            print(meta_table_create)
+            cur.execute(meta_table_create)
+            self.sqldr.conn.commit()
+        return
+
+    def populate_isd_meta(self):
+        """Populate SQL table with Airport metadata from Pandas DF.  Also populate measure table"""
         air_df = self.get_air_meta_df()
         data_cols = ["name", "City", "ST", "CALL", "USAF", "WBAN", "LAT", "LON"]
         sub_data = air_df[data_cols].values.tolist()
@@ -388,53 +482,60 @@ class ISDMeta:
         for i, D in enumerate(sub_data):
             D.insert(0, i)
         data_strings = [format_insert_str(D, col_types) for D in sub_data]
+        # effectively do nothing on conflict.
+        val_col = ColName.CALL
+        self.sqldr.insert_data_column(
+            table_name=ISDName.AIR_META,
+            data=data_strings,
+            col_list=col_names,
+            val_col=val_col,
+            unique_list=[ColName.CALL],
+            update=True,
+        )
+        return
 
-        self.sqldr.insert_data(ISDName.META, data_strings, col_list=col_names)
-        return data_strings[:5]
+    def populate_measures(self):
+        # populate measure table
+        data_list = [
+            f"({idx}, '{abbr}')" for idx, abbr in ISDDF.ind_name_lookup.items()
+        ]
+        print(data_list)
+        cols = ["id", "measure"]
+        self.sqldr.insert_data_column(
+            table_name=ISDName.MEASURE,
+            col_list=cols,
+            data=data_list,
+            unique_list=[ColName.MEASURE],
+            val_col=ColName.MEASURE,
+            update=True,
+        )
 
     def create_tables(self):
         """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
         sql_comm = f"""
         CREATE TABLE IF NOT EXISTS {ISDName.ISD}
             ({ColName.TS} timestamp with time zone,
-            {ColName.CALL} char(4),
-            {ColName.MEASURE} varchar(20),
+            {ColName.CALL_ID} smallint,
+            {ColName.MEASURE_ID} smallint,
             {ColName.VAL} float
             );
         """
-        # Will slow down insert.  Can add index later
         # removed: UNIQUE ({ColName.TS}, {ColName.CALL}, {ColName.MEASURE})
-
+        # could alter to use call_id and measure_id as integers
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
     def create_indexes(self):
         """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
-        sql_comm = f"CREATE INDEX ix_{ISDName.ISD} ON {ISDName.ISD} ({ColName.TS}, {ColName.MEASURE}, {ColName.CALL});"
+        sql_comm = f"""CREATE INDEX ix_{ISDName.ISD} ON {ISDName.ISD}
+        ({ColName.TS}, {ColName.MEASURE_ID}, {ColName.CALL_ID});"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
-
-    # def _get_create_isd_table_sql_wide(self, table_name: str, var_type: str) -> str:
-    #     """Get String SQL Command to create SQL table for NOAA ISD data from Airports.
-    #     Old form with wide table format with one col per airport"""
-    #     if var_type not in ALLOWED_TYPES:
-    #         raise RuntimeError(f"{var_type} not in {ALLOWED_TYPES}!")
-    #     str_list = [
-    #         f"CREATE TABLE IF NOT EXISTS {table_name} ",
-    #         "(ts timestamp,",
-    #     ]
-    #     call_signs = self.load_callsigns()
-    #     many_str_list = [f"{cs} {var_type}" for cs in call_signs]
-    #     str_list += [", ".join(many_str_list)]
-    #     str_list += [") PRIMARY KEY ts;"]
-    #     # index column on ts? or combine year/month?
-    #     # How to handle bulk update? temp table with update?
-    #     return " ".join(str_list)
 
     def drop_tables(self, execute=False):
         """Drop the tables!  Only sould be used when cleaning up setup.
         execute is not True means only print commands.
         execute = True will execute, and drop the table!
         """
-        for table_name in [ISDName.ISD, ISDName.META]:
+        for table_name in [ISDName.ISD, ISDName.AIR_META]:
             sql_comm = f"DROP TABLE IF EXISTS {table_name};"
             if execute is True:
                 print(f"Dropping table {table_name}!")
@@ -448,7 +549,7 @@ class ISDMeta:
     def get_isd_filenames(self):
         """Use ISD Meta table to build up known file list"""
         wban_usaf_list = self.sqldr.get_data(
-            f"SELECT USAF, WBAN, CALLSIGN FROM {ISDName.META}"
+            f"SELECT USAF, WBAN, CALLSIGN FROM {ISDName.AIR_META} ORDER BY CALLSIGN"
         )
         file_list = []
         for usaf, wban, callsign in wban_usaf_list:
@@ -467,16 +568,21 @@ class ISDMeta:
 
         # out_sql = []
         for file_count, (file, callsign) in enumerate(tqdm(files)):
+            # print(file, callsign)
             # df = load_isd_df(file)
             data_list = ISDDF.load_fwf_isd_file(file)
+            callsign_id = self.get_callsign_id(callsign)
             for measure in self.ISD_MEASURES:
-                cols = [ISDDF.TIME, measure]
-                sub_data = ISDDF.get_cols(cols, data_list)[:Ntime]
+                measure_id = self.get_measure_id(measure)
+                df_cols = [ISDDF.TIME, measure]
+                sub_data = ISDDF.get_cols(df_cols, data_list)[:Ntime]
+
                 data = [
-                    self.get_data_insert_str(x, callsign, measure) for x in sub_data
+                    self.get_data_insert_str(x, callsign_id, measure_id)
+                    for x in sub_data
                 ]
-                cols = [ColName.TS, ColName.CALL, ColName.MEASURE, ColName.VAL]
-                unique_list = [ColName.TS, ColName.CALL, ColName.MEASURE]
+                cols = [ColName.TS, ColName.CALL_ID, ColName.MEASURE_ID, ColName.VAL]
+                unique_list = [ColName.TS, ColName.CALL_ID, ColName.MEASURE_ID]
 
                 self.sqldr.insert_data_column(
                     table_name=ISDName.ISD,
@@ -487,15 +593,26 @@ class ISDMeta:
                     bulk=bulk,
                     update=update,
                 )
-        if file_count % Ncommit == 0 and bulk:
-            self.sqldr.commit()
+            if file_count % Ncommit == 0 and bulk:
+                self.sqldr.commit()
+        self.sqldr.commit()
+
+    def get_callsign_id(self, callsign):
+        return self.sqldr.get_data(
+            f"SELECT {ColName.ID} FROM {ISDName.AIR_META} WHERE {ColName.CALL}='{callsign}'"
+        )[0][0]
+
+    def get_measure_id(self, measure):
+        return self.sqldr.get_data(
+            f"SELECT {ColName.ID} FROM {ISDName.MEASURE} WHERE {ColName.MEASURE}='{measure}'"
+        )[0][0]
 
     @classmethod
     def get_data_insert_str(cls, x, callsign, measure):
         if x[1]:
-            return f"('{x[0]}', '{callsign}', '{measure}', {x[1]})"
+            return f"('{x[0]}', {callsign}, {measure}, {x[1]})"
         else:
-            return f"('{x[0]}', '{callsign}', '{measure}', NULL)"
+            return f"('{x[0]}', {callsign}, {measure}, NULL)"
 
 
 class SQLDriver:
@@ -599,13 +716,20 @@ class SQLDriver:
             print(sql_com)
         print(f"DELETING TABLE {table_name}")
         self.execute_with_rollback(sql_com)
+        return
 
-    def get_data(self, sql_qry: str) -> List:
+    def get_data(self, sql_qry: str) -> Optional[List]:
         """Execute a select query and return results."""
         with self.conn.cursor() as cur:
-            cur.execute(sql_qry)
-            rv = cur.fetchall()
-        return rv
+            try:
+                cur.execute(sql_qry)
+                rv = cur.fetchall()
+                return rv
+            except Exception as e:
+                print(f"SQLDriver.get_data: Failed on {sql_qry}")
+                print(e)
+                self.rollback()
+        return list()
 
     def get_columns(self, table_name: str) -> List:
         """Return list of (name, column number, type) tuples for specified table"""

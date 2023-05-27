@@ -47,6 +47,12 @@ Allows usage of Jupyter from within Emacs.  Useful when VSCode acting up, or bro
 - `ein: notebooklist-login`
 - Provide port 8890, then password.
 
+### May 25
+- Got EBA script working relatively efficiently for loading in data.  Took 30 min?
+Still seems like lots of room for improvement there.
+  Optimized by eliminating pandas in reading data, unique constraint on SQL, and simplifying where.
+  Cut time by 2/3.
+
 ## May 23
 - Moved library code around to src layout with setup.cfg
   (Motivated by need to allow scripts using library code to run and import code)
