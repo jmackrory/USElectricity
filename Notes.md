@@ -28,7 +28,7 @@ For GPU support change `docker-compose.yml` to
 May also need to change `.env` `TF_IMAGE` to use a `-gpu-jupyter` image.
 
 To run shell:
-`docker compose -f docker/docker-compose.yml run tfjupyter /bin/bash`
+`docker compose -f docker/docker-compose.yml run tfjupyter -u $(id -u):$(id -g) -it /bin/bash`
 
 Note: gpu version in `docker-compose.gpu.yml` with container `tfjupyter-gpu`
 
@@ -63,7 +63,7 @@ Still seems like lots of room for improvement there.
    Fix suggested of doing something like
    `pip install -e . --src /path/to/src`
    from the module directory works.
-- created local virtual_env on host machine to install to allow better editting experience with VSCode.
+- created local virtual_env on host machine to install to allow better editting experience with VSCode with libraries. 
 
 ## Mar 16
 

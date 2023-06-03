@@ -264,11 +264,11 @@ class EBAMeta:
     def create_indexes(self):
         """Create all relevant Tables for EBA data"""
 
-        sql_comm = f"""CREATE INDEX ix_{EBAName.EBA} ON {EBAName.EBA}
+        sql_comm = f"""CREATE INDEX ix_{EBAName.EBA}_t ON {EBAName.EBA}
         ({ColName.TS}, {ColName.MEASURE_ID}, {ColName.SOURCE_ID});"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
-        sql_comm = f"""CREATE INDEX ix_{EBAName.INTERCHANGE} ON {EBAName.INTERCHANGE}
+        sql_comm = f"""CREATE INDEX ix_{EBAName.INTERCHANGE}_t ON {EBAName.INTERCHANGE}
         ({ColName.TS}, {ColName.SOURCE_ID}, {ColName.DEST_ID});"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
@@ -283,29 +283,54 @@ class EBAMeta:
             if execute is True:
                 self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
+    def drop_indexes(self):
+        """Make time-series tables for ISD data.  Currently Temp, Wind speed, Precip"""
+        sql_comm = f"DROP INDEX IF EXISTS ix_{EBAName.EBA}_t;"
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
+        sql_comm = f"DROP INDEX IF EXISTS ix_{EBAName.INTERCHANGE}_t;"
+        self.sqldr.execute_with_rollback(sql_comm, verbose=True)
+
     def populate_meta_tables(self):
         iso_map = self.load_iso_dict_json()
 
-        cols = [{ColName.ABBR}, {ColName.FULL_NAME}]
-        data_list = [(abbr, fullname) for abbr, fullname in iso_map.items()]
+        cols = [ColName.ABBR, ColName.FULL_NAME]
+        data_list = [f"('{abbr}', '{fullname}')" for abbr, fullname in iso_map.items()]
         self.sqldr.insert_data_column(
             table_name=EBAName.ISO_META,
-            cols=cols,
-            col_types=[SQLVar.str, SQLVar.str],
-            data_list=data_list,
+            col_list=cols,
+            # col_types=[SQLVar.str, SQLVar.str],
+            data=data_list,
             unique_list=cols,
             update=True,
+            val_col=ColName.FULL_NAME,
         )
+
+        # self.sqldr.insert_data_column(
+        #     table_name=table_name,
+        #     col_list=cols,
+        #     data=data_list,
+        #     unique_list=unique_list,
+        #     val_col=ColName.VAL,
+        #     bulk=bulk,
+        #     update=update,
+        # )
+
         eba_names = get_cls_attr_dict(EBAGenAbbr)
         gen_names = get_cls_attr_dict(EBAAbbr)
-        data_list = [(abbr, fullname) for abbr, fullname in eba_names.items()]
-        data_list += [(abbr, fullname) for abbr, fullname in gen_names.items()]
+        data_list = [
+            f"('{abbr}', '{fullname}')" for abbr, fullname in eba_names.items()
+        ]
+        data_list += [
+            f"('{abbr}', '{fullname}')" for abbr, fullname in gen_names.items()
+        ]
         self.sqldr.insert_data_column(
             table_name=EBAName.MEASURE,
-            cols=cols,
-            col_types=[SQLVar.str, SQLVar.str],
-            data_list=data_list,
+            col_list=cols,
+            # col_types=[SQLVar.str, SQLVar.str],
+            data=data_list,
             unique_list=cols,
+            val_col=ColName.FULL_NAME,
             update=True,
         )
 
@@ -331,7 +356,7 @@ class EBAMeta:
                 out_list.append((dat["name"], dat["series_id"]))
         return out_list
 
-    def load_data(self):
+    def load_data(self, Nseries=-1, Ntime=-1, bulk=True, update=False, Ncommit=50):
         """Load in relevant data series.  Only keep the ones on UTC time."""
         # load files one by one.
         # if in desired type, then insert.
@@ -341,27 +366,32 @@ class EBAMeta:
         int_re = re.compile("Actual Net Interchange")
         utc_re = re.compile("UTC")
 
+        file_count = 0
+
         # name_reg = re.compile(f'{name_lookup}') if name_lookup else None
         with jsonlines.open(self.eba_filename, "r") as fh:
             for dat in tqdm(fh):
+                file_count += 1
                 name = dat["name"]
                 if not dat["series_id"] and not dat["data"]:
                     continue
                 if not utc_re.search(name):
                     continue
+                if Nseries > 0 and file_count > Nseries:
+                    break
+
                 source, dest, tags, _ = self.parse_eba_series_id(dat["series_id"])
                 source_id = self.get_eba_source_id(source)
                 if int_re.search(name):
                     dest_id = self.get_eba_source_id(dest)
                     table_name = EBAName.INTERCHANGE
                     cols = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID, ColName.VAL]
-                    col_types = [
-                        SQLVar.timestamptz,
-                        SQLVar.str,
-                        SQLVar.str,
-                        SQLVar.float,
+                    unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID]
+                    sub_data = dat["data"][:Ntime]
+                    data_list = [
+                        f"('{x[0]}', '{source_id}', '{dest_id}', {x[1]})"
+                        for x in sub_data
                     ]
-                    data_list = [(x[0], source_id, dest_id, x[1]) for x in dat["data"]]
                 else:
                     measure_id = self.get_eba_measure_id(tags[-1])
                     table_name = EBAName.EBA
@@ -371,19 +401,30 @@ class EBAMeta:
                         ColName.MEASURE_ID,
                         ColName.VAL,
                     ]
-                    col_types = [
-                        SQLVar.timestamptz,
-                        SQLVar.int,
-                        SQLVar.int,
-                        SQLVar.float,
-                    ]
-                    # unique_list = ["ts", "source", "measure"]
+                    unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.MEASURE_ID]
+                    sub_data = dat["data"][:Ntime]
                     data_list = [
-                        (x[0], source_id, measure_id, x[1]) for x in dat["data"]
+                        f"('{x[0]}', '{source_id}', '{measure_id}', {x[1]})"
+                        for x in sub_data
                     ]
+                # self.sqldr.insert_data_column(
+                #    table_name, cols, col_types, data_list, update=False, bulk=True
+                # )
+
+                # cols = [ColName.TS, ColName.CALL_ID, ColName.MEASURE_ID, ColName.VAL]
+
                 self.sqldr.insert_data_column(
-                    table_name, cols, col_types, data_list, update=False, bulk=True
+                    table_name=table_name,
+                    col_list=cols,
+                    data=data_list,
+                    unique_list=unique_list,
+                    val_col=ColName.VAL,
+                    bulk=bulk,
+                    update=update,
                 )
+            if file_count % Ncommit == 0 and bulk:
+                self.sqldr.commit()
+        self.sqldr.commit()
 
     def get_eba_source_id(self, source):
         qry_str = f"SELECT id FROM {EBAName.ISO_META} WHERE {ColName.ABBR} = {source};"
