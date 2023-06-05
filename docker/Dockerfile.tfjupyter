@@ -1,4 +1,4 @@
-ARG TF_IMAGE=2.11.0-jupyter
+ARG TF_IMAGE=2.12.0-jupyter
 FROM tensorflow/tensorflow:$TF_IMAGE
 
 #USER root
