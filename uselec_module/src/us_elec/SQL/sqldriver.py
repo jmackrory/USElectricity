@@ -49,9 +49,6 @@ class EBAName:
     EBA = "eba"
     ISO_META = "eba_iso_meta"
     MEASURE = "eba_measure"
-    # DEMAND = "demand"
-    # DEMAND_FORECAST = "demand_forecast"
-    # NET_GENERATION = "net_generation"
     INTERCHANGE = "eba_interchange"
 
 
@@ -64,15 +61,20 @@ class EBAAbbr:
 
 
 class EBAGenAbbr:
-    COL = "Coal"
-    WAT = "Hydro"
-    NG = "Natural Gas"
-    NUC = "Nuclear"
-    OIL = "Oil"
-    OTH = "Other"
-    SUN = "Solar"
-    TOT = "Total"
-    WND = "Wind"
+    COL = "Generation - Coal"
+    WAT = "Generation - Hydro"
+    NG = "Generation - Natural Gas"
+    NUC = "Generation - Nuclear"
+    OIL = "Generation - Oil"
+    OTH = "Generation - Other"
+    SUN = "Generation - Solar"
+    TOT = "Generation - Total"
+    WND = "Generation - Wind"
+
+
+class EBAExtra:
+    CAN = "Canada (region)"
+    MEX = "Mexico (region)"
 
 
 class ISDName:
@@ -249,7 +251,7 @@ class EBAMeta:
         sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.ISO_META}
             (id SMALLSERIAL,
             {ColName.FULL_NAME} varchar(100),
-            {ColName.ABBR} varchar(4) UNIQUE
+            {ColName.ABBR} varchar(10) UNIQUE
             );"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
@@ -257,7 +259,7 @@ class EBAMeta:
         sql_comm = f"""CREATE TABLE IF NOT EXISTS {EBAName.MEASURE}
             (id SMALLSERIAL,
             {ColName.FULL_NAME} varchar(100),
-            {ColName.ABBR} varchar(4) UNIQUE
+            {ColName.ABBR} varchar(10) UNIQUE
             );"""
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
@@ -277,7 +279,12 @@ class EBAMeta:
         execute=False means only print commands.
         execute=True will execute!
         """
-        for table_name in [EBAName.EBA, EBAName.INTERCHANGE]:
+        for table_name in [
+            EBAName.EBA,
+            EBAName.INTERCHANGE,
+            EBAName.MEASURE,
+            EBAName.ISO_META,
+        ]:
             sql_comm = f"DROP TABLE IF EXISTS {table_name};"
             print(sql_comm)
             if execute is True:
@@ -291,45 +298,63 @@ class EBAMeta:
         sql_comm = f"DROP INDEX IF EXISTS ix_{EBAName.INTERCHANGE}_t;"
         self.sqldr.execute_with_rollback(sql_comm, verbose=True)
 
-    def populate_meta_tables(self):
-        iso_map = self.load_iso_dict_json()
+    @classmethod
+    def get_name_abbr(cls, st):
+        out_list = []
+        for h in re.findall(r"for ([\w\s\,\.\-]+) \((\w+)\)", st):
+            out_list.append((h[1], h[0]))
+        for h in re.findall(r"to ([\w\s\,\.\-]+) \((\w+)\)", st):
+            out_list.append((h[1], h[0]))
+        return out_list
 
+    @classmethod
+    def find_dups(cls, data):
+        found_data = set()
+        for D in data:
+            if D in found_data:
+                print("dupe!", D)
+            found_data.update([D])
+        print(found_data)
+
+    def _populate_iso_meta(self, abbr_name_tups):
         cols = [ColName.ABBR, ColName.FULL_NAME]
-        data_list = [f"('{abbr}', '{fullname}')" for abbr, fullname in iso_map.items()]
+        data_list = [f"('{abbr}', '{fullname}')" for abbr, fullname in abbr_name_tups]
         self.sqldr.insert_data_column(
             table_name=EBAName.ISO_META,
             col_list=cols,
-            # col_types=[SQLVar.str, SQLVar.str],
             data=data_list,
-            unique_list=cols,
+            unique_list=[ColName.ABBR],
             update=True,
             val_col=ColName.FULL_NAME,
         )
 
-        # self.sqldr.insert_data_column(
-        #     table_name=table_name,
-        #     col_list=cols,
-        #     data=data_list,
-        #     unique_list=unique_list,
-        #     val_col=ColName.VAL,
-        #     bulk=bulk,
-        #     update=update,
-        # )
+    def populate_meta_tables(self):
+        """Populate EBA metadata about ISOs and Measure abbreviations"""
+        # iso_map = self.load_iso_dict_json()
+        df = self.load_metadata()
+        iso_map = self.parse_metadata(df)
 
-        eba_names = get_cls_attr_dict(EBAGenAbbr)
-        gen_names = get_cls_attr_dict(EBAAbbr)
+        more_names = get_cls_attr_dict(EBAExtra)
+
+        self._populate_iso_meta(list(iso_map.items()))
+        self._populate_iso_meta(list(more_names.items()))
+
+        cols = [ColName.ABBR, ColName.FULL_NAME]
+        eba_names = get_cls_attr_dict(EBAAbbr)
         data_list = [
             f"('{abbr}', '{fullname}')" for abbr, fullname in eba_names.items()
         ]
+        gen_names = get_cls_attr_dict(EBAGenAbbr)
+        # hard-coded abbreviation munging
         data_list += [
-            f"('{abbr}', '{fullname}')" for abbr, fullname in gen_names.items()
+            f"('NG-{abbr}', '{fullname}')" for abbr, fullname in gen_names.items()
         ]
         self.sqldr.insert_data_column(
             table_name=EBAName.MEASURE,
             col_list=cols,
             # col_types=[SQLVar.str, SQLVar.str],
             data=data_list,
-            unique_list=cols,
+            unique_list=[ColName.ABBR],
             val_col=ColName.FULL_NAME,
             update=True,
         )
@@ -337,9 +362,9 @@ class EBAMeta:
     def parse_eba_series_id(self, str):
         sub = str.split(".")[1:]  # drop the EBA
         source, dest = sub[0].split("-")
-        tags = sub[1:-1]
+        tag = "-".join(sub[1:-1])
         time = sub[-1]
-        return source, dest, tags, time
+        return source, dest, tag, time
 
     def read_metadata(self):
         """Read in name / series_ids."""
@@ -348,7 +373,6 @@ class EBAMeta:
         # before insert, check if times exists.
         # otherwise update based on time overlap.
         out_list = []
-        # name_reg = re.compile(f'{name_lookup}') if name_lookup else None
         with jsonlines.open(self.eba_filename, "r") as fh:
             for dat in tqdm(fh):
                 if not dat.get("series_id") and not dat.get("data"):
@@ -358,61 +382,33 @@ class EBAMeta:
 
     def load_data(self, Nseries=-1, Ntime=-1, bulk=True, update=False, Ncommit=50):
         """Load in relevant data series.  Only keep the ones on UTC time."""
-        # load files one by one.
-        # if in desired type, then insert.
-        # before insert, check if times exists.
-        # otherwise update based on time overlap.
 
         int_re = re.compile("Actual Net Interchange")
         utc_re = re.compile("UTC")
 
         file_count = 0
-
-        # name_reg = re.compile(f'{name_lookup}') if name_lookup else None
         with jsonlines.open(self.eba_filename, "r") as fh:
             for dat in tqdm(fh):
-                file_count += 1
                 name = dat["name"]
-                if not dat["series_id"] and not dat["data"]:
+                if not dat.get("series_id") and not dat.get("data"):
                     continue
                 if not utc_re.search(name):
                     continue
                 if Nseries > 0 and file_count > Nseries:
                     break
 
-                source, dest, tags, _ = self.parse_eba_series_id(dat["series_id"])
-                source_id = self.get_eba_source_id(source)
+                file_count += 1
+
                 if int_re.search(name):
-                    dest_id = self.get_eba_source_id(dest)
                     table_name = EBAName.INTERCHANGE
-                    cols = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID, ColName.VAL]
-                    unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID]
-                    sub_data = dat["data"][:Ntime]
-                    data_list = [
-                        f"('{x[0]}', '{source_id}', '{dest_id}', {x[1]})"
-                        for x in sub_data
-                    ]
+                    cols, unique_list, data_list = self._get_interchange_sql_inputs(
+                        dat, Ntime=Ntime
+                    )
                 else:
-                    measure_id = self.get_eba_measure_id(tags[-1])
                     table_name = EBAName.EBA
-                    cols = [
-                        ColName.TS,
-                        ColName.SOURCE_ID,
-                        ColName.MEASURE_ID,
-                        ColName.VAL,
-                    ]
-                    unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.MEASURE_ID]
-                    sub_data = dat["data"][:Ntime]
-                    data_list = [
-                        f"('{x[0]}', '{source_id}', '{measure_id}', {x[1]})"
-                        for x in sub_data
-                    ]
-                # self.sqldr.insert_data_column(
-                #    table_name, cols, col_types, data_list, update=False, bulk=True
-                # )
-
-                # cols = [ColName.TS, ColName.CALL_ID, ColName.MEASURE_ID, ColName.VAL]
-
+                    cols, unique_list, data_list = self._get_regular_sql_inputs(
+                        dat, Ntime=Ntime
+                    )
                 self.sqldr.insert_data_column(
                     table_name=table_name,
                     col_list=cols,
@@ -422,17 +418,81 @@ class EBAMeta:
                     bulk=bulk,
                     update=update,
                 )
-            if file_count % Ncommit == 0 and bulk:
-                self.sqldr.commit()
+                if file_count % Ncommit == 0 and bulk:
+                    print("commiting")
+                    self.sqldr.commit()
         self.sqldr.commit()
 
-    def get_eba_source_id(self, source):
-        qry_str = f"SELECT id FROM {EBAName.ISO_META} WHERE {ColName.ABBR} = {source};"
-        return self.sqldr.get_data(qry_str)
+    def _get_interchange_sql_inputs(self, dat, Ntime=-1):
+        source, dest, tag, _ = self.parse_eba_series_id(dat["series_id"])
+        # print(dat["name"], dat["series_id"], source, dest, tag)
+        source_id = self.get_eba_source_id(source, dat["name"])
+        dest_id = self.get_eba_source_id(dest, dat["name"])
+
+        cols = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID, ColName.VAL]
+        unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID]
+        sub_data = dat["data"][:Ntime]
+        data_list = [
+            self.get_data_insert_str(x, source_id, dest_id)
+            # f"('{self.parse_time_str(x[0])}', {source_id}, {dest_id}, {x[1]})"
+            for x in sub_data
+        ]
+        return cols, unique_list, data_list
+
+    def _get_regular_sql_inputs(self, dat: Dict, Ntime: int = -1):
+        source, dest, tag, _ = self.parse_eba_series_id(dat["series_id"])
+        # dest_id = self.get_eba_source_id(dest)
+        # print(dat["name"], dat["series_id"], source, dest, tag)
+        source_id = self.get_eba_source_id(source, dat["name"])
+        measure_id = self.get_eba_measure_id(tag)
+
+        cols = [ColName.TS, ColName.SOURCE_ID, ColName.MEASURE_ID, ColName.VAL]
+        unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.MEASURE_ID]
+        sub_data = dat["data"][:Ntime]
+        data_list = [
+            self.get_data_insert_str(x, source_id, measure_id)
+            # f"('{self.parse_time_str(x[0])}', {source_id}, {measure_id}, {x[1]})"
+            for x in sub_data
+        ]
+        return cols, unique_list, data_list
+
+    @classmethod
+    def parse_time_str(cls, V):
+        # convert time strings like : YYYYMMDDTHHZ to YYYY-MM-DDTHH:00:00
+        return f"{V[:4]}-{V[4:6]}-{V[6:11]}:00:00"
+
+    @classmethod
+    def get_data_insert_str(cls, x, source_id, measure_id):
+        if x[1]:
+            return f"('{cls.parse_time_str(x[0])}', {source_id}, {measure_id}, {x[1]})"
+        else:
+            return f"('{cls.parse_time_str(x[0])}', {source_id}, {measure_id}, NULL)"
+
+    def get_eba_source_id(self, source, name, dpth=0):
+        qry_str = (
+            f"SELECT id FROM {EBAName.ISO_META} WHERE {ColName.ABBR} = '{source}';"
+        )
+        source_id = self.sqldr.get_data(qry_str)
+
+        if dpth > 2:
+            raise RuntimeError(f"EBA - No source found for {source_id}")
+
+        if not source_id:
+            # try to insert source,
+            print(f"EBA - No source found for {source_id}.  Trying update")
+            abbr_name_tups = self.get_name_abbr(name)
+            self._populate_iso_meta(abbr_name_tups)
+            return self.get_eba_source_id(source, name, dpth + 1)
+        return source_id[0][0]
 
     def get_eba_measure_id(self, measure):
-        qry_str = f"SELECT id FROM {EBAName.MEASURE} WHERE {ColName.ABBR} = {measure};"
-        return self.sqldr.get_data(qry_str)
+        qry_str = (
+            f"SELECT id FROM {EBAName.MEASURE} WHERE {ColName.ABBR} = '{measure}';"
+        )
+        measure_id = self.sqldr.get_data(qry_str)
+        if not measure_id:
+            raise RuntimeError(f"No measure found for {measure}")
+        return measure_id[0][0]
 
 
 class ISDMeta:
