@@ -20,13 +20,16 @@ def create_eba_tables_and_load_eba_data():
         print("Dropping ISD Tables!")
         ebm.drop_tables(execute=True)
         ebm.drop_indexes()
-    print("Creating and Populating Meta Table")
-    ebm.extract_meta_data()
-    ebm.save_iso_dict_json()
 
-    ebm.populate_meta_tables()
     print("Creating ISD Table")
     ebm.create_tables()
+
+    print("Creating and Populating Meta Table")
+    # ebm.extract_meta_data()
+    # ebm.save_iso_dict_json()
+    ebm.populate_meta_tables()
+
+    print("Loading data")
     ebm.load_data(Nseries=args.Nseries, Ntime=args.Ntime)
     print("Creating Index")
     ebm.create_indexes()
