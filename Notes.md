@@ -47,6 +47,87 @@ Allows usage of Jupyter from within Emacs.  Useful when VSCode acting up, or bro
 - `ein: notebooklist-login`
 - Provide port 8890, then password.
 
+### Aug 2 - Docker + GPU + Ubuntu
+
+Docker woes.  Docker not picking up the GPU anymore.
+Uninstalled and reinstalled Docker via apt.
+
+TF container suggests running Docker image in rootless mode.
+https://docs.docker.com/engine/security/rootless/
+
+bash
+```
+sudo apt-get install -y docker-ce-rootless-extras
+dockerd-rootless-setuptool.sh install
+```
+
+Automatically start on login.
+bash
+```
+ systemctl --user enable docker
+ sudo loginctl enable-linger $(whoami)
+```
+
+Delete the line with credsStore from ~/.docker/config.json.
+
+
+- Can test the GPU a couple ways.
+1. Just with nvidia images.  This needs the docker toolkit installed.
+https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+Can test with:
+Nvidia uses:
+`
+sudo docker run --rm --runtime=nvidia --gpus all nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
+`
+Followed advice here: https://github.com/nvidia/nvidia-container-runtime#docker-engine-setup to setup runtime
+- Edited /etc/docker/daemon.conf to:
+```
+{
+    "runtimes": {
+        "nvidia": {
+            "args": [],
+            "path": "nvidia-container-runtime"
+        }
+    },
+    "default-runtime": "nvidia"
+}
+```
+
+Also did:
+```
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/override.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd --host=fd:// --add-runtime=nvidia=/usr/bin/nvidia-container-runtime
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+2. Check TF Docker container can find the GPU.
+https://www.tensorflow.org/install/docker
+
+Running:
+```
+docker run --gpus all -it --rm tensorflow/tensorflow:latest-gpu \
+   python -c "import tensorflow as tf; print(tf.reduce_sum(tf.random.normal([1000, 1000])))
+```
+And
+```
+docker run  --gpus all -it --rm tensorflow/tensorflow:latest-gpu \
+  python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+```
+So that seems to work at finding a GPU. BUT! BUT!
+```
+docker run  --gpus all -it --rm tensorflow/tensorflow:latest-gpu-jupyter \
+  python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+```
+Fails to find a GPU.  FML.
+
+But using earlier versions of tensorflow this works in both versions.  Tried 2.4.0 it worked.  2.12.0 it fails.
+
+
 ### May 25
 - Got EBA script working relatively efficiently for loading in data.  Took 30 min?
 Still seems like lots of room for improvement there.
@@ -63,7 +144,7 @@ Still seems like lots of room for improvement there.
    Fix suggested of doing something like
    `pip install -e . --src /path/to/src`
    from the module directory works.
-- created local virtual_env on host machine to install to allow better editting experience with VSCode with libraries. 
+- created local virtual_env on host machine to install to allow better editting experience with VSCode with libraries.
 
 ## Mar 16
 
