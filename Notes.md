@@ -4,8 +4,10 @@
 - Includes daily changes.
 
 ## Motivation for Docker
-- Maintaining the tensorflow environment was a pain, and finicky.  The now suggest using Docker.  And Working with Docker makes it more portable,
- and reproduceable, albeit at the cost of working with Docker which has it's own finickyness.  This also helps with the databases, since there is less concern about affecting other DBs on the personal machine.
+- Maintaining the tensorflow environment was a pain, and finicky.  They now suggest using Docker.
+And Working with Docker makes it more portable,  and reproduceable, albeit at the cost of working
+with Docker which has it's own finickyness.  This also helps with the databases, since there is
+less concern about affecting other DBs on the personal machine.
 
 
 ## Running Docker setup
@@ -46,6 +48,11 @@ Allows usage of Jupyter from within Emacs.  Useful when VSCode acting up, or bro
 - `Ctrl-c Ctrl-x`
 - `ein: notebooklist-login`
 - Provide port 8890, then password.
+
+(VSCode is increasingly annoying to work with.
+  - extend emacs with EIN for notebooks
+  - direx for view
+  - jedi for language server (auto-complete and navigation)
 
 ### Aug 2 - Docker + GPU + Ubuntu
 
@@ -126,7 +133,7 @@ docker run  --gpus all -it --rm tensorflow/tensorflow:latest-gpu-jupyter \
 Fails to find a GPU.  FML.
 
 But using earlier versions of tensorflow this works in both versions.  Tried 2.4.0 it worked.  2.12.0 it fails.
-
+2.11.0 works.
 
 ### May 25
 - Got EBA script working relatively efficiently for loading in data.  Took 30 min?

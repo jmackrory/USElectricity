@@ -20,7 +20,7 @@ class multiseasonal_temp(object):
 
     def __init__(
         self,
-        l=0,
+        lv=0,
         b=0,
         s=np.zeros((2, 24)),
         alpha=0.1,
@@ -31,7 +31,7 @@ class multiseasonal_temp(object):
         Tp=200,
         Tn=150,
     ):
-        self.l = l
+        self.lv = lv
         self.b = b
         self.s = s
         self.alpha = alpha
@@ -87,17 +87,17 @@ class multiseasonal_temp(object):
         """
         ysub = y[: self.Ninit]
         Tsub = T[0 : self.Ninit]
-        ymu = np.min(ysub)
+        # ymu = np.min(ysub)
         # try to remove linear temperature trend.
         # should only try this after removing annual average?
         ysub = ysub - self.Tmodel(Tsub)
         yval = ysub.values
         ##average value
-        self.l = yval[0]  # np.mean(yval)
+        self.lv = yval[0]  # np.mean(yval)
         ##average shift
         self.b = (yval[self.Ninit - 1] - yval[0]) / self.Ninit
         ##remove mean pattern, subtract off level, and linear trend.
-        ysub = ysub - self.l - self.b * np.arange(self.Ninit)
+        ysub = ysub - self.lv - self.b * np.arange(self.Ninit)
         # mean seasonal pattern.
         # second seasonal pattern is for weekends, with days
         # Saturday/Sunday have dayofweek equal to 5 and 6.
@@ -120,11 +120,11 @@ class multiseasonal_temp(object):
         """
         t0 = y.index
         m1 = t0.dayofweek >= 5
-        m1_n = t0.dayofweek < 5
+        # m1_n = t0.dayofweek < 5
         m2 = t0.hour
         # find temp trend.
         Ttrend = self.Tmodel(T[t0])
-        trend = self.l + self.b * np.arange(len(y))
+        trend = self.lv + self.b * np.arange(len(y))
         season = self.s[m1.astype(int), m2]
         # make prediction based on current estimates
         ypred = Ttrend + trend + season
@@ -139,7 +139,7 @@ class multiseasonal_temp(object):
         m1_n = t0.dayofweek < 5
         eps = y - ypred
         eps_l = eps[0]  # np.mean(eps)
-        self.l = self.l + self.alpha * eps_l
+        self.lv = self.lv + self.alpha * eps_l
         eps = eps - eps_l
         eps_b = (eps[-1] - eps[0]) / len(eps)
         self.b = self.b + self.beta * eps_b
@@ -154,14 +154,12 @@ class multiseasonal_temp(object):
         Then update parameters given true demand.
         """
         self.fit_init_params(y, T)
-        t0 = y.index[0]
-        m1 = t0.dayofweek >= 5
-        m2 = t0.hour
+        # t0 = y.index[0]
         ypred = np.zeros(len(y))
         ti = y[: self.Ninit].index
         msk = ti.dayofweek >= 5
         Ttrend = self.Tmodel(T[ti])
-        trend = self.l + self.b * np.arange(self.Ninit)
+        trend = self.lv + self.b * np.arange(self.Ninit)
         season = self.s[msk.astype(int), ti.hour.values]
 
         ypred[: self.Ninit] = Ttrend + trend + season
@@ -436,11 +434,11 @@ class multiseasonal_temp(object):
         plt.show()
 
     def test_level(self):
-        Nt = 48
+        #Nt = 48
         a = 4
         b = np.kron([2, 3], np.ones(24))
-        z = np.random.random(48)
-        t = np.arange(Nt)
+        # z = np.random.random(48)
+        # t = np.arange(Nt)
         y = a + np.cumsum(b)
 
         y_level = self.calc_day_level(y)
@@ -472,13 +470,13 @@ class multiseasonal_temp(object):
         """
         self.fit_init_params(y, T)
         t0 = y.index[skip]
-        m1 = t0.dayofweek >= 5
-        m2 = t0.hour
+        #m1 = t0.dayofweek >= 5
+        #m2 = t0.hour
         ypred = np.zeros(len(y))
         ti = y[skip : skip + self.Ninit].index
         msk = ti.dayofweek >= 5
         Ttrend = self.Tmodel(T[ti])
-        trend = self.l + self.b * np.arange(self.Ninit)
+        trend = self.lv + self.b * np.arange(self.Ninit)
         season = self.s[msk.astype(int), ti.hour.values]
 
         i0 = skip
@@ -490,11 +488,11 @@ class multiseasonal_temp(object):
             tslice = slice(i0, i1)
             ypred[tslice] = self.predict_dayahead(y[tslice], T[tslice])
             self.correct_dayahead(y[tslice], ypred[tslice])
-            tarr = np.arange(i0, i1)
+            #tarr = np.arange(i0, i1)
             ti = y[tslice].index
             msk = ti.dayofweek >= 5
             Ttrend = self.Tmodel(T[ti])
-            trend = self.l + self.b * np.arange(self.N0)
+            trend = self.lv + self.b * np.arange(self.N0)
             season = self.s[msk.astype(int), ti.hour.values]
             plt.figure(2)
             plt.plot(ti, trend + season, "C0-")
@@ -507,7 +505,7 @@ class multiseasonal_temp(object):
         plt.savefig("fig/seasonal_update.png")
         plt.show()
         plt.figure(1)
-        tarr = np.arange(skip + self.Ninit, i1)
+        # tarr = np.arange(skip + self.Ninit, i1)
         tslice = slice(skip + self.Ninit, i1)
         plt.plot(y.index[tslice], ypred[tslice], y.index[tslice], y[tslice])
         plt.legend(["Prediction", "Actual"], loc="lower right", prop={"size": 9})

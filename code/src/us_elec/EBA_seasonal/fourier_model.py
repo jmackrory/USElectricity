@@ -66,7 +66,6 @@ class fourier_model(object):
         over time T.
         T assumed to be in range [0,1).
         """
-        i = 1
         nmax = len(coeff)
         f = np.zeros(T.shape)
         # need a +1 somewhere due to 0-indexing,

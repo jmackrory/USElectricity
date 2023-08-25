@@ -2,14 +2,14 @@
 Recurent Neural Network
 
 Creates python class for creating, training, saving, infering a
-Tensorflow graph to forecast time-series. 
-Makes a simple multilayer RNN, with mapping from inputs 
-to hidden layers.  
+Tensorflow graph to forecast time-series.
+Makes a simple multilayer RNN, with mapping from inputs
+to hidden layers.
 
 Based on object oriented framework used in CS 224,
 and A. Geron's "Hands on Machine Learning with Scikit-Learn and
-Tensorflow" Ch 14 on RNN.  
-The tensorflow docs are pretty rough, but the tutorials are almost readable. 
+Tensorflow" Ch 14 on RNN.
+The tensorflow docs are pretty rough, but the tutorials are almost readable.
 
 The input (X), and target (y) placeholders are defined in add_placeholders.
 These are inputs to the TF graph.
@@ -18,11 +18,11 @@ This takes in inputs from Nstep_in.
 This is mapped down to a different number of dimensions via a linear tranformation layer.
 There is then a multi-layer RNN with dropout for regularization.
 Then the model has a final linear layer (analogous to attention?)
-to output a sequence of length Nstep_out, with Noutput variables at each step. 
+to output a sequence of length Nstep_out, with Noutput variables at each step.
 
-Before the network can be run it should be built, which defines the 
+Before the network can be run it should be built, which defines the
 The guts of the network are defined in add_prediction_op, which
-has an input/output hidden layer to reduce dimension.  
+has an input/output hidden layer to reduce dimension.
 There is then a multilayer, dynamic RNN inside.
 This is all defined with tensorflow intrinsics/added modules.
 Currently, I've turned off the dropout, which should only be active
@@ -31,7 +31,7 @@ during training.  (Can toggle this by tweeking keep_prob).
 The training is done with batch gradient descent optimization
 via the Adam optimizer.
 
-The loss/cost function is defined in add_loss_op, and is just 
+The loss/cost function is defined in add_loss_op, and is just
 the mean-square error across inputs.
 
 Prediction and inference is done in predict_all()
@@ -159,17 +159,6 @@ class NNModel(object):
         if labels_batch is not None:
             feed_dict[self.y] = labels_batch
         return feed_dict
-
-    def add_prediction_op(self):
-        """The core model to the graph, that
-        transforms the inputs into outputs.
-        Implements deep neural network with relu activation.
-
-        Returns: outputs - tensor
-
-        """
-        raise NotImplementedError
-        return outputs
 
     def add_loss_op(self, outputs):
         """Add ops for loss to graph.
@@ -302,7 +291,7 @@ class NNModel(object):
                     nn_pred = self.predict_on_batch(sess, X_batch[:2])
                     self.plot_data(X_batch[0], y_batch[0], nn_pred[0])
                     # save the weights
-                    if save_name != None:
+                    if save_name is not None:
                         saver.save(
                             sess,
                             save_name,
@@ -361,7 +350,7 @@ class NNModel(object):
             tf.reset_default_graph()
         self.is_training = False
         self.keep_prob = 1
-        if num == None:
+        if num is None:
             full_model_name = model_name + "-{}".format(self.config.Nepoch)
         else:
             full_model_name = model_name + "-{}".format(num)
@@ -380,13 +369,13 @@ class NNModel(object):
             if Nin < Nt_per_batch:
                 print("Number of inputs < Number of batch expected")
                 print("Padding with zeros")
-                input_dat = np.append(
-                    input_dat,
+                input_data = np.append(
+                    input_data,
                     np.zeros((self.config.Nbatch - Nin, self.config.Noutputs)),
                 )
             nn_pred_total = np.zeros((Nin, self.config.Noutputs))
             i0 = 0
-            end_of_file = False
+            #end_of_file = False
             Niter = 0
             # keep going over all data.
             while i0 < Nin:
@@ -429,43 +418,15 @@ class NNModel(object):
                         print("Hit End!")
                         j2 = Nin - 1
                         nn_pred_total[j0:j2, :] = nn_pred[i, j2 - j0]
-                        end_of_file = True
                         break
                 i0 = i0 + self.config.Nsteps_out * Nb
-            ## Original version
-            # i0=0
-            # i1=self.config.Nbatch*self.
-            # nn_pred_total=np.zeros((Nin,self.config.Noutputs))
-            # while (i1 < Nin-self.config.Nsteps_in-self.config.Nsteps_out):
-            #     print(i0,i1)
-            #     #now treat each time, as another element in a batch.
-            #     #(i.e. march through dataset predicting, instead of randomly selecting for training)
-            #     X_batch=np.zeros((self.config.Nbatch,self.config.Nsteps_in,self.config.Ninputs))
-
-            #     for i in range(self.config.Nbatch):
-            #         j1 = j2
-            #         j2 = j1+self.config.Nsteps_in
-            #         X_batch[i,:,:]=input_data[(i0+i):(i0+i+self.config.Nsteps_in),:]
-            #     nn_pred=self.predict_on_batch(sess,X_batch)
-            #     sl=slice(self.config.Nsteps_in+i0,self.config.Nsteps_in+i1)
-            #     nn_pred_total[sl]=nn_pred
-            #     i0=i1
-            #     i1+=self.config.Nbatch
-            # #last iter: do remaining operations.
-            # Nleft=Nin-i0-self.config.Nsteps
-            # X_batch=np.zeros((Nleft,self.config.Nsteps,self.config.Ninputs))
-            # for i in range(Nleft):
-            #     X_batch[i,:,:]=input_data[(i0+i):(i0+i+self.config.Nsteps),:]
-            # nn_pred=self.predict_on_batch(sess,X_batch)
-            # nn_pred_total[-Nleft:]=nn_pred
-            # #nn_pred_reduced=np.round(nn_pred_total).astype(bool)
         return nn_pred_total
 
     def restore_model(self, sess, model_name, num=None):
         """Attempts to reset both TF graph, and
         RNN stored variables/structure.
         """
-        if num == None:
+        if num is None:
             full_model_name = model_name + "-" + str(self.config.Nepoch)
         else:
             full_model_name = model_name + "-" + str(num)
@@ -643,10 +604,6 @@ class simpleRecurrentNeuralNetwork(NNModel):
         X = tf.get_collection("X")[0]
         y = tf.get_collection("y")[0]
         outputs = tf.get_collection("pred")[0]
-        train_op = tf.get_collection("train_op")[0]
-        loss = tf.get_collection("loss")[0]
-        # restores weights etc.
-        # saver.restore(sess,full_model_name)
 
         with tf.Session() as sess:
             # restore variables

@@ -41,8 +41,8 @@ COPY docker/requirements.txt /home/requirements.txt
 RUN pip install --upgrade -r /home/requirements.txt
 
 # Install module code in editable form.  src set to also allow mounting host-machine dir
-COPY uselec_module /home/uselec_module
-WORKDIR /home/uselec_module
+COPY code /home/code
+WORKDIR /home/code
 RUN pip install -e . --src /home/edit-src
 
 COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py

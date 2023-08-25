@@ -6,19 +6,17 @@
 # down peaks: remove_na
 
 
-import json
+from typing import Optional
 import jsonlines
-import re
 from tqdm import tqdm
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import adfuller, acf, pacf, arma_order_select_ic
 
 
-def read_eba_txt(fn: str, N: int = None, name_lookup: str = None):
+def read_eba_txt(fn: str, N: Optional[int], name_lookup: Optional[str]):
     """Read in all JSON from Lines file.
 
     Args:

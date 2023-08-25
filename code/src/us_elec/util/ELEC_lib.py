@@ -49,7 +49,7 @@ def plot_data_frame(df, title, xlabel, ylabel, labels=None, logy=False):
     if labels is None:
         labels = df["name"].values
     for i in range(0, len(df)):
-        if logy == True:
+        if logy is True:
             plt.semilogy(df.iloc[i]["data2"], label=labels[i])
         else:
             plt.plot(df.iloc[i]["data2"], label=labels[i])
@@ -121,7 +121,7 @@ def plot_customers(cur, region):
     Inputs: cur - psycopg2 cursor
     region - string for State/Region name
     """
-    us_price = pd.DataFrame()
+    # us_price = pd.DataFrame()
     out_col = ("name", "data", "start", "end", "f")
     match_names = ["customer accounts", ": " + region + " :"]
     df = get_dataframe(cur, "ELEC", out_col, match_names, freq="M")

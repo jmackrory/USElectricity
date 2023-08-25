@@ -3,7 +3,7 @@ Class for Multiseasonal demand model, ignoring temperature.
 
 Currently using incorrect updating procedure.
 Will update to correct updating procedure, then offer
-and optimized version for computing optimal parameters. 
+and optimized version for computing optimal parameters.
 """
 
 import numpy as np
@@ -19,7 +19,7 @@ from IPython.display import clear_output
 class multiseasonal(object):
     def __init__(
         self,
-        l=0,
+        lv=0,
         b=0,
         s=np.zeros((2, 24)),
         alpha=0.1,
@@ -37,7 +37,7 @@ class multiseasonal(object):
         beta  - b update
         gamma - 2x2 matrix for s update.
         """
-        self._l = l
+        self._lv = lv
         self._b = b
         self._s = s
         self._alpha = alpha
@@ -106,7 +106,7 @@ class multiseasonal(object):
         # find seasonal patterns.
         m1 = t.hour
         # Original version with bias in there too?
-        self._l = self._l + self._b + self._alpha * eps
+        self._lv = self._lv + self._b + self._alpha * eps
         self._b = self._b + self._beta * eps
 
         # update row, and hour
@@ -119,7 +119,7 @@ class multiseasonal(object):
 
         # predict the next value given the updated parameter
         # use the weekday_msk to select which pattern to use, and hour for time
-        ynew = self._l + self._s[weekday_msk, m1]
+        ynew = self._lv + self._s[weekday_msk, m1]
         return ynew
 
     def predict_dayahead(self, t0):
@@ -128,7 +128,7 @@ class multiseasonal(object):
         """
         m1 = (t0.dayofweek >= 5).astype(int)
         m2 = t0.hour
-        trend = self._l + self._b * np.arange(len(t0))
+        trend = self._lv + self._b * np.arange(len(t0))
         season = self._s[m1.astype(int), m2]
         # parameter updates
         ytot = pd.Series(trend + season, index=t0)
@@ -149,7 +149,7 @@ class multiseasonal(object):
 
         eps = ypred - y
         eps_l = np.mean(eps)
-        self._l = self._l + self._alpha * eps_l
+        self._lv = self._lv + self._alpha * eps_l
         # remove level, estimate linear trend
         eps = eps - eps_l
         eps_b = (eps[-1] - eps[0]) / len(eps)
@@ -167,9 +167,7 @@ class multiseasonal(object):
         Then update parameters given true demand.
         """
         self.fit_init_params(y, ninit=ninit)
-        t0 = y.index[0]
-        m1 = t0.dayofweek >= 5
-        m2 = t0.hour
+        #t0 = y.index[0]
         ypred = np.zeros(len(y))
         ti = y[:ninit].index
         msk = ti.dayofweek >= 5

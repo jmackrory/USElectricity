@@ -8,7 +8,8 @@ from mpl_toolkits.basemap import Basemap as Basemap
 from matplotlib.colors import rgb2hex, Normalize
 from matplotlib.patches import Polygon
 from matplotlib.colorbar import ColorbarBase
-from matplotlib.collections import LineCollection
+
+# from matplotlib.collections import LineCollection
 import numpy as np
 import pickle
 import warnings
@@ -58,10 +59,10 @@ def create_instance():
         # ---------   draw state boundaries  ----------------------------------------
         ## data from U.S Census Bureau
         ## http://www.census.gov/geo/www/cob/st2000.html
-        shp_info = m.readshapefile(
-            "data/st99_d00", "states", drawbounds=True, linewidth=0.45, color="gray"
-        )
-        shp_info_ = m_.readshapefile("data/st99_d00", "states", drawbounds=False)
+        # shp_info = m.readshapefile(
+        #    "data/st99_d00", "states", drawbounds=True, linewidth=0.45, color="gray"
+        # )
+        # shp_info_ = m_.readshapefile("data/st99_d00", "states", drawbounds=False)
         pickle.dump(m, open("data/usstates.pickle", "wb"), -1)
         pickle.dump(m, open("data/usstates2.pickle", "wb"), -1)
         # #Need to figure out how to picke that shape info, and reload
@@ -199,7 +200,5 @@ def plot_us_data(fig, ax, m, m_, data, label_text, title_text):
     ax.set_title(title_text)
     # ---------   Show color bar  ---------------------------------------
     ax_c = fig.add_axes([0.9, 0.1, 0.03, 0.8])
-    cb = ColorbarBase(
-        ax_c, cmap=cmap, norm=norm, orientation="vertical", label=label_text
-    )
+    ColorbarBase(ax_c, cmap=cmap, norm=norm, orientation="vertical", label=label_text)
     plt.show()

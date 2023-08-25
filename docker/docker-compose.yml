@@ -42,7 +42,7 @@ services:
       - ../data:/tf/data
       - ../notebooks:/tf/notebooks
       - ../scripts:/tf/scripts
-      - ../uselec_module:/home/uselec_module
+      - ../code:/home/code
       - ../.jupyter:/root/.jupyter
     ports:
       - 8890:8888

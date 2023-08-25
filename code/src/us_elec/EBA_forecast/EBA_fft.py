@@ -3,6 +3,8 @@
 # Goes with EIA_explore.ipynb.
 
 import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def remove_square_peak(Y, f, center, width):
@@ -29,7 +31,6 @@ def remove_square_peak(Y, f, center, width):
     mean_msk = mean_msk & ~trend_msk
 
     replace_avg = Y[mean_msk].mean()
-    replace_std = Y[mean_msk].std()
     trend = np.zeros(len(f)) + 0j
     trend[trend_msk] = Y[trend_msk] - replace_avg
     detrend = Y - trend
@@ -194,7 +195,6 @@ def run_plots(df_joint):
     # scale time to days.
     Tmax = Nt / 24
     dt = 1 / 24
-    t = np.arange(0, Tmax, dt)
     df = 1 / Tmax
     fmax = 0.5 / dt
     f = np.arange(-fmax, fmax, df)

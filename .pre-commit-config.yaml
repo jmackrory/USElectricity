@@ -5,14 +5,15 @@ repos:
   - id: black
     description: Autoformatting of Python code to meet PEP.
     language_version: python3.10
--   repo: https://github.com/pycqa/flake8
-    rev: 3.7.9
-    hooks:
-    -   id: flake8
--   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.3.0
-    hooks:
-    -   id: mypy
-        additional_dependencies: [types-tensorflow==2.11.0,
-        data-science-types, types-requests]
-        # need these for mypy stubs.
+- repo: https://github.com/pycqa/flake8
+  rev: 3.7.9
+  hooks:
+  - id: flake8
+    args: ['--config=.flake8']
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.3.0
+  hooks:
+  - id: mypy
+    additional_dependencies: [types-tensorflow==2.11.0,
+      data-science-types, types-requests]
+      # need these for mypy stubs.

@@ -30,7 +30,7 @@ services:
       dockerfile: ./docker/Dockerfile.tfjupyter
       context: ../
       args:
-        TF_IMAGE: 2.12.0-gpu-jupyter
+        TF_IMAGE: 2.11.0-gpu-jupyter
     #user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -42,7 +42,7 @@ services:
       - ../data:/tf/data
       - ../notebooks:/tf/notebooks
       - ../scripts:/tf/scripts
-      - ../uselec_module:/home/uselec_module
+      - ../code:/home/code
       - ../.jupyter:/root/.jupyter
       - ../.history:/tf/.history
     ports:
