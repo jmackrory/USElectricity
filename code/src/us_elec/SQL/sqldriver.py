@@ -53,6 +53,7 @@ class EBAName:
 
 
 class EBAAbbr:
+    # measure names for EBA
     NG = "Net Generation"
     ID = "Net Interchange"
     DF = "Demand Forecast"
@@ -61,6 +62,7 @@ class EBAAbbr:
 
 
 class EBAGenAbbr:
+    # measure names for subtypes of EBA generation
     COL = "Generation - Coal"
     WAT = "Generation - Hydro"
     NG = "Generation - Natural Gas"
@@ -73,6 +75,7 @@ class EBAGenAbbr:
 
 
 class EBAExtra:
+    # measure names for other regions
     CAN = "Canada (region)"
     MEX = "Mexico (region)"
 
