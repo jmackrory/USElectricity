@@ -160,8 +160,14 @@ EBA_NAME_PATH = "./meta/iso_names.csv"
 YEARS = list(range(2015, 2024))
 
 
+@lru_cache()
 def get_cls_attr_dict(cls):
     return {k: v for k, v in cls.__dict__.items() if not k.startswith("__")}
+
+
+@lru_cache()
+def get_reverse_cls_attr_dict(cls):
+    return {v: k for k, v in cls.__dict__.items() if not k.startswith("__")}
 
 
 @lru_cache(1)
