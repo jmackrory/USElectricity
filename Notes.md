@@ -133,7 +133,7 @@ docker run  --gpus all -it --rm tensorflow/tensorflow:latest-gpu-jupyter \
 Fails to find a GPU.  FML.
 
 But using earlier versions of tensorflow this works in both versions.  Tried 2.4.0 it worked.  2.12.0 it fails.
-2.11.0 works.
+2.11.0 works.  Might be related to CUDA driver versions which despite updats are pinned and not updating.
 
 ### May 25
 - Got EBA script working relatively efficiently for loading in data.  Took 30 min?

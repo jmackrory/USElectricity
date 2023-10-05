@@ -45,6 +45,7 @@ services:
       - ../code:/home/code
       - ../.jupyter:/root/.jupyter
       - ../.history:/tf/.history
+      - ~/.aws:/root/.aws
     ports:
       - 8890:8888
     deploy:
