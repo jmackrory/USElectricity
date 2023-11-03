@@ -725,22 +725,28 @@ class ISDMeta:
             return f"('{x[0]}', {callsign}, {measure}, NULL)"
 
 
+def get_creds():
+    db = os.environ.get("PG_DEV_DB", None)
+    if not db:
+        raise RuntimeError("SQLDriver could not find Postgres DB Name")
+
+    pw = os.environ.get("PG_DEV_PASSWORD", "")
+    if not pw:
+        raise RuntimeError("SQLDriver could not find Postgres DB Password")
+    user = os.environ.get("PG_DEV_USER", "")
+    if not user:
+        raise RuntimeError("SQLDriver could not find Postgres DB User")
+    return db, pw, user
+
+
 class SQLDriver:
     def __init__(self):
         self.conn = self.get_connection()
 
     def get_connection(self):
         """Get default connection"""
-        db = os.environ.get("POSTGRES_DB", None)
-        if not db:
-            raise RuntimeError("SQLDriver could not find Postgres DB Name")
+        db, pw, user = get_creds()
 
-        pw = os.environ.get("POSTGRES_PASSWORD", "")
-        if not pw:
-            raise RuntimeError("SQLDriver could not find Postgres DB Password")
-        user = os.environ.get("POSTGRES_USER", "")
-        if not user:
-            raise RuntimeError("SQLDriver could not find Postgres DB User")
         # pg_url = f"postgres://db:5432"
         conn = psycopg2.connect(
             dbname=db, user=user, password=pw, host="postgres", port=5432

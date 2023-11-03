@@ -54,6 +54,13 @@ Allows usage of Jupyter from within Emacs.  Useful when VSCode acting up, or bro
   - direx for view
   - jedi for language server (auto-complete and navigation)
 
+### Nov 3
+Revisiting SQL setup and credentials.  Added init.sql and settled for simple plain text passwords for users.  This is for a single user on a local box.
+This allows dev/test users to be split and have different SQL permissions,
+and run the tests inside the dev container.  That cuts down on some duplication.
+Will otherwise be careful with credentials.
+
+
 ### Aug 2 - Docker + GPU + Ubuntu
 
 Docker woes.  Docker not picking up the GPU anymore.

@@ -38,19 +38,25 @@ class DataSet:
 
 
 class OldRecord(NamedTuple):
+    """OldRecord(NamedTuple)
+
+    Tuple containing numpy arrays with:
+    t - time
+    dem - demand array
+    temp - temperature array
+    dem_fore - demand forecast array
+    """
+
     t: np.ndarray
     dem: np.ndarray
     temp: np.ndarray
     dem_fore: np.ndarray
-    temp_arr_fore: Optional[np.ndarray] = None
 
+    def save_json(record):
+        pass
 
-def rec_to_json(record):
-    pass
-
-
-def json_to_rec(dict):
-    pass
+    def load_json(str):
+        pass
 
 
 # TODO: figure out json serializaiton / deserialization.
@@ -86,6 +92,9 @@ class SimpleDataSet(DataSet):
         df = df.pivot_table(
             index=ColName.TS, columns=[ColName.ABBR], values=ColName.VAL
         )
+        # JM comment: this runs into issues with potential numbers/order of stations changing over time periods.
+        # Options: write out all stations. Its around 50-200 for EBA/ISD data.
+
         # convert to DF, pivot.
         return df
 

@@ -3,23 +3,14 @@ services:
     image: postgres:15
     restart: always
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${PG_ROOT_PASSWORD}
+      POSTGRES_USER: ${PG_ROOT_USER}
+      POSTGRES_DB: ${DEV_POSTGRES_DB}
     ports:
       - 6543:5432
     volumes:
       - ../../docker_data/postgres-docker:/var/lib/postgresql/data
-
-  #mongo:
-  #  image: mongo
-  #  ports:
-  #    - 27017:27017
-  #  environment:
-  #    - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
-  #    - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
-  #  volumes:
-  #    - ../../docker_data/mongo-docker:/data/db
+      - ./files/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   tfjupyter-gpu:
     depends_on:
@@ -29,13 +20,17 @@ services:
     build:
       dockerfile: ./docker/Dockerfile.tfjupyter
       context: ../
+      target: jupyter
       args:
         TF_IMAGE: 2.11.0-gpu-jupyter
     #user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_DB: ${POSTGRES_DB}
+      PG_DEV_PASSWORD: ${PG_DEV_PASSWORD}
+      PG_DEV_USER: ${PG_DEV_USER}
+      PG_DEV_DB: ${PG_DEV_DB}
+      PG_TEST_PASSWORD: ${PG_TEST_PASSWORD}
+      PG_TEST_USER: ${PG_TEST_USER}
+      PG_TEST_DB: ${PG_TEST_DB}
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes:
@@ -44,7 +39,7 @@ services:
       - ../scripts:/tf/scripts
       - ../code:/home/code
       - ../.jupyter:/root/.jupyter
-      - ../.history:/tf/.history
+      - ../.history:/home/.history
       - ~/.aws:/root/.aws
     ports:
       - 8890:8888
@@ -64,3 +59,13 @@ services:
       "--allow-root",
       "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net",
       "--notebook-dir", "/tf"]
+
+  #mongo:
+  #  image: mongo
+  #  ports:
+  #    - 27017:27017
+  #  environment:
+  #    - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+  #    - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+  #  volumes:
+  #    - ../../docker_data/mongo-docker:/data/db
