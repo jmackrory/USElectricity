@@ -54,13 +54,19 @@ Allows usage of Jupyter from within Emacs.  Useful when VSCode acting up, or bro
   - direx for view
   - jedi for language server (auto-complete and navigation)
 
-### Nov 3
+### Nov 3 - Docker Rootless and File Permissions
 Revisiting SQL setup and credentials.  Added init.sql and settled for simple plain text passwords for users.  This is for a single user on a local box.
 This allows dev/test users to be split and have different SQL permissions,
 and run the tests inside the dev container.  That cuts down on some duplication.
 Will otherwise be careful with credentials.
 
-
+Tried creating user inside Docker container for local docker and setting UID/GID from ubuntu account
+to allow running in rootless docker.
+Ok, using a new user inside the container conflicts with rootless Docker on the host and volume mounts permissions.  In that mode the permissions are overwritten when you mount the volume and the root user owns the mounts, which nixes mounting in folders where you need read/write access.
+https://forums.docker.com/t/bind-mounting-permissions-with-user-broken-using-rootless-docker/88257/4
+https://forums.docker.com/t/docker-rootless-unable-to-write-to-volume/131486
+Apparently developers intention with rootless docker is to run as root inside the container!
+Since we're passing in uid/gid from the host user, the Docker root user is just my regular user on the host.
 
 ### Aug 2 - Docker + GPU + Ubuntu
 
