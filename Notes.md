@@ -61,6 +61,7 @@ and run the tests inside the dev container.  That cuts down on some duplication.
 Will otherwise be careful with credentials.
 
 
+
 ### Aug 2 - Docker + GPU + Ubuntu
 
 Docker woes.  Docker not picking up the GPU anymore.

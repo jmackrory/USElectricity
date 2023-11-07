@@ -49,6 +49,7 @@ RUN pip install -e . --src /home/edit-src
 COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
 COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_config.py
 COPY docker/files/.bash_profile /root/.bash_profile
+RUN cat /root/.bash_profile >> /root/.bashrc
 
 ENV JUPYTER_CONFIG_DIR=/tf/.jupyter
 ENV PYTHON_PATH="$PYTHON_PATH:/tf"
@@ -61,8 +62,6 @@ RUN mkdir -p /home/.history/.ipython
 RUN mkdir -p /home/.history/.mpl
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/home/.history/.bash_history" \
     && echo "$SNIPPET" >> "/root/.bashrc"
-
-FROM base as jupyter
 
 WORKDIR /tf
 
