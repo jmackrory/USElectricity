@@ -51,7 +51,7 @@ COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_confi
 COPY docker/files/.bash_profile /root/.bash_profile
 RUN cat /root/.bash_profile >> /root/.bashrc
 
-ENV JUPYTER_CONFIG_DIR=/tf/.jupyter
+ENV JUPYTER_CONFIG_DIR=/root/.jupyter
 ENV PYTHON_PATH="$PYTHON_PATH:/tf"
 ENV IPYTHONDIR="/home/.history/.ipython"
 ENV MPLCONFIGDIR="/home/.history/.mpl"

@@ -753,6 +753,9 @@ class SQLDriver:
         )
         return conn
 
+    def get_db_name(self):
+        return self.conn.get_dsn_parameters().get("dbname")
+
     def rollback(self):
         """Rollback failed SQL transaction"""
         with self.conn.cursor() as cur:

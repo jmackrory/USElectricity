@@ -8,6 +8,14 @@ import pandas as pd
 from us_elec.SQL.sqldriver import ISDDF, ColName, EBAAbbr, EBAName, ISDName, SQLDriver
 
 
+class Key:
+    T = "t"
+    DEM = "dem"
+    DEM_FORE = "dem_fore"
+    TEMP = "temp"
+    TEMP_FORE = "temp_fore"
+
+
 class DataSet:
     def __init__(
         self,
@@ -37,7 +45,7 @@ class DataSet:
         pass
 
 
-class OldRecord(NamedTuple):
+class OldRecord:
     """OldRecord(NamedTuple)
 
     Tuple containing numpy arrays with:
@@ -47,15 +55,24 @@ class OldRecord(NamedTuple):
     dem_fore - demand forecast array
     """
 
-    t: np.ndarray
-    dem: np.ndarray
-    temp: np.ndarray
-    dem_fore: np.ndarray
+    def __init__(
+        self, t: np.ndarray, dem: np.ndarray, temp: np.ndarray, dem_fore: np.ndarray
+    ):
+        self.t = t
+        self.dem = dem
+        self.temp = temp
+        self.dem_fore = dem_fore
 
-    def save_json(record):
-        pass
+    def to_json(self):
+        D = {
+            "t": self.t.tolist(),
+            "dem": self.dem.tolist(),
+            "temp": self.temp.tolist(),
+            "dem_fore": self.dem_fore.tolist(),
+        }
+        return D
 
-    def load_json(str):
+    def from_json(str):
         pass
 
 
@@ -73,7 +90,7 @@ class SimpleDataSet(DataSet):
         # self.ed = get_reverse_cls_attr_dict(EBAAbbr)
         # self.id = get_reverse_cls_attr_dict(ISDDF)
 
-    def get_eba_record(self, meas, t1, t2):
+    def get_eba_record(self, meas: str, t1: str, t2: str):
         sql = f"""
         SELECT e.{ColName.TS}, im.{ColName.ABBR}, e.{ColName.VAL} FROM {EBAName.EBA} AS e
         INNER JOIN {EBAName.ISO_META} AS im ON {ColName.SOURCE_ID} = im.{ColName.ID}
@@ -119,6 +136,12 @@ class SimpleDataSet(DataSet):
         )
 
         return df
+
+    def get_temp_forecast(self, t1):
+        path = self._get_forecast(t1, ftype)
+        # get relevant forecast
+        # load forecast
+        # extract relevant pieces
 
     def get_recs(self, t1, t2, t3):
         """

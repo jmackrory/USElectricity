@@ -5,7 +5,7 @@ import os
 from unittest import TestCase
 from unittest.mock import patch
 
-from us_elec.SQL.sqldriver import SQLDriver
+from us_elec.SQL.sqldriver import EBAMeta, ISDMeta, SQLDriver
 
 
 def get_mock_creds():
@@ -27,13 +27,32 @@ def get_mock_creds():
     return db, pw, user
 
 
+def get_conn_db(conn):
+    conn_ps = conn.get_dsn_parameters().get("dbname")
+
+
 @patch("us_elec.SQL.sqldriver.get_creds", get_mock_creds)
 class Tests(TestCase):
-    def setUp(cls):
+    @classmethod
+    def setUpClass(cls):
+        cls.eba = EBAMeta()
+        cls.eba.create_tables()
+        cls.eba.create_meta_table()
+        cls.isd = ISDMeta()
+        cls.isd.create_tables()
         pass
 
-    def tearDown(cls):
-        pass
+    @classmethod
+    def tearDownClass(cls):
+        eba_db = cls.eba.sqldr.get_db_name()
+        if eba_db == "test":
+            cls.eba.drop_tables(execute=True)
+            cls.eba.drop_indexes()
+
+        isd_db = cls.isd.sqldr.get_db_name()
+        if isd_db == "test":
+            cls.isd.drop_tables(execute=True)
+            cls.isd.drop_indexes()
 
     def test_basic(self):
         self.assertEqual(2 + 2, 4)
@@ -42,4 +61,4 @@ class Tests(TestCase):
         sql = SQLDriver()
         conn_ps = sql.conn.get_dsn_parameters()
         print(conn_ps)
-        self.assertTrue(conn_ps["db_name"] == "test")
+        self.assertTrue(conn_ps["dbname"] == "test")
