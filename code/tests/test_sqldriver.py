@@ -1,6 +1,3 @@
-# SQL tests written against live DB.  Need to create test fixtures.
-# Also connect to a TestDB
-
 import os
 from unittest import TestCase
 from unittest.mock import patch
@@ -35,9 +32,13 @@ def get_conn_db(conn):
 class Tests(TestCase):
     @classmethod
     def setUpClass(cls):
+        import subprocess
+
+        r0 = subprocess.run("id")
+        print(r0)
         cls.eba = EBAMeta()
         cls.eba.create_tables()
-        cls.eba.create_meta_table()
+        # cls.eba.create_meta_table()
         cls.isd = ISDMeta()
         cls.isd.create_tables()
         pass
