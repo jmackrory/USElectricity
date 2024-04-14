@@ -30,7 +30,10 @@ For GPU support change `docker-compose.yml` to
 May also need to change `.env` `TF_IMAGE` to use a `-gpu-jupyter` image.
 
 To run shell:
-`docker compose -f docker/docker-compose.yml run tfjupyter -u $(id -u):$(id -g) -it /bin/bash`
+`docker compose -f docker/docker-compose.yml exec -u $(id -u):$(id -g) -it tfjupyter  /bin/bash`
+
+To run test, launch a shell then
+`python -m unittest /home/code/tests`
 
 Note: gpu version in `docker-compose.gpu.yml` with container `tfjupyter-gpu`
 
@@ -41,6 +44,21 @@ Note: gpu version in `docker-compose.gpu.yml` with container `tfjupyter-gpu`
 Clear the Remote Server List.
 - It's also important to make sure you select the Docker container environment kernel, as otherwise it will run in the local environment.
 
+#### 4/14 Setting up SQL logins.
+- need to run the commands to create the non-root users from docker/files/sql/init.sql
+- need to give them permissions.
+- probably best to blow away the old stuff by running `rm -r ../docker_data/postgres-data`
+- note the Docker may automatically create root user and you need to create the other users directly via the docker-compose.  (annoying oversight: passing in the default users will skip the regular init.sql)
+- run `docker compose -f docker/docker-compose.yml up`
+- run `docker comose -f docker/docker-compose.yml exec postgres /bin/bash` to get shell as root in postgres container
+- run `psql -U postgres -f docker-entrypoint-initdb.d/init.sql` to create the DBs and respective dev/test users 
+
+Moving to SQLAlchemy rather than making my own crummy API.
+
+#### Spark
+Adding skeleton for spark notebooks in Docker.
+Will talk to same DBs/storage.   
+
 ### Emacs and Jupyter - Emacs IPython Notebook (EIN)
 
 Allows usage of Jupyter from within Emacs.  Useful when VSCode acting up, or browser shortcuts are annoying for code editing.
@@ -49,17 +67,18 @@ Allows usage of Jupyter from within Emacs.  Useful when VSCode acting up, or bro
 - `ein: notebooklist-login`
 - Provide port 8890, then password.
 
-(VSCode is increasingly annoying to work with.
+VSCode is increasingly annoying to work with.
   - extend emacs with EIN for notebooks
   - direx for view
   - jedi for language server (auto-complete and navigation)
 
 ### Nov 3 - Docker Rootless and File Permissions
+#### SQL
 Revisiting SQL setup and credentials.  Added init.sql and settled for simple plain text passwords for users.  This is for a single user on a local box.
 This allows dev/test users to be split and have different SQL permissions,
 and run the tests inside the dev container.  That cuts down on some duplication.
 Will otherwise be careful with credentials.
-
+#### Root and Docker
 Tried creating user inside Docker container for local docker and setting UID/GID from ubuntu account
 to allow running in rootless docker.
 Ok, using a new user inside the container conflicts with rootless Docker on the host and volume mounts permissions.  In that mode the permissions are overwritten when you mount the volume and the root user owns the mounts, which nixes mounting in folders where you need read/write access.

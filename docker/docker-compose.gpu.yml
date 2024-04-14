@@ -59,6 +59,46 @@ services:
       "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net",
       "--notebook-dir", "/tf"]
 
+  spark-notebook:
+    depends_on:
+      - postgres
+      #- mongo
+    container_name: spark-notebook
+    build:
+      dockerfile: ./docker/Dockerfile.spark
+      context: ../
+      args:
+        SPARK_IMAGE: spark-3.5.1
+    #user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
+    environment:
+      PG_DEV_PASSWORD: ${PG_DEV_PASSWORD}
+      PG_DEV_USER: ${PG_DEV_USER}
+      PG_DEV_DB: ${PG_DEV_DB}
+      PG_TEST_PASSWORD: ${PG_TEST_PASSWORD}
+      PG_TEST_USER: ${PG_TEST_USER}
+      PG_TEST_DB: ${PG_TEST_DB}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    # check paths for spark.
+    volumes:
+      - ../data:/tf/data
+      - ../notebooks:/tf/notebooks
+      - ../scripts:/tf/scripts
+      - ../code:/home/code
+      - ../.jupyter:/root/.jupyter
+      - ../.history:/home/.history
+      - ~/.aws:/root/.aws
+    ports:
+      - 8890:8888
+    command: ["/usr/local/bin/jupyter",
+      "notebook",
+      "--ip", "0.0.0.0",
+      "--port", "8888",
+      "--no-browser",
+      "--allow-root",
+      "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net",
+      "--notebook-dir", "/tf"]
+
   #mongo:
   #  image: mongo
   #  ports:

@@ -1,0 +1,22 @@
+numpy
+pandas
+matplotlib
+scikit-learn
+statsmodels
+sqlalchemy
+ipdb
+ipykernel >= 6.0.0
+tzfpy
+geos
+shapely==1.8.0
+pyshp==2.3.1
+cartopy==0.21.1
+tqdm==4.64.1
+line_profiler
+psycopg2-binary
+jsonlines
+xarray
+cfgrib==0.9.10.3
+setuptools<60
+boto3
+pytest

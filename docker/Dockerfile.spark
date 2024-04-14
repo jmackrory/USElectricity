@@ -1,14 +1,12 @@
-ARG TF_IMAGE=2.12.0-jupyter
-FROM tensorflow/tensorflow:$TF_IMAGE AS base
+ARG SPARK_IMAGE=spark-3.5.1
+FROM quay.io/jupyter/pyspark-notebook:$SPARK_IMAGE
 
-#USER root
 # postgres
 EXPOSE 5432
 # mongo
 EXPOSE 27017
 # jupyter
 EXPOSE 8888
-
 
 RUN apt-get update && \
     apt-get install -y \
@@ -35,33 +33,31 @@ RUN make
 #RUN ctest
 RUN make install
 
-#RUN /usr/bin/python3 -m pip install --upgrade pip
-
-COPY docker/requirements.tf.txt /home/requirements.tf.txt
-RUN pip install --upgrade -r /home/requirements.tf.txt
+COPY docker/requirements.spark.txt /home/requirements.spark.txt
+RUN pip install --upgrade -r /home/requirements.spark.txt
 
 # Install module code in editable form.  src set to also allow mounting host-machine dir
 COPY code /home/code
 WORKDIR /home/code
-RUN mkdir /tf/.pytest_cache
+#RUN mkdir /tf/.pytest_cache
 RUN pip install -e . --src /home/edit-src
 
-COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
-COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_config.py
-COPY docker/files/.bash_profile /root/.bash_profile
-RUN cat /root/.bash_profile >> /root/.bashrc
+#COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
+#COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_config.py
+#COPY docker/files/.bash_profile /root/.bash_profile
+#RUN cat /root/.bash_profile >> /root/.bashrc
 
-ENV JUPYTER_CONFIG_DIR=/root/.jupyter
-ENV PYTHON_PATH="$PYTHON_PATH:/tf"
-ENV IPYTHONDIR="/home/.history/.ipython"
-ENV MPLCONFIGDIR="/home/.history/.mpl"
+#ENV JUPYTER_CONFIG_DIR=/root/.jupyter
+#ENV PYTHON_PATH="$PYTHON_PATH:/tf"
+#ENV IPYTHONDIR="/home/.history/.ipython"
+#ENV MPLCONFIGDIR="/home/.history/.mpl"
 
 # store bash history
-RUN mkdir -p /home/.history
-RUN mkdir -p /home/.history/.ipython
-RUN mkdir -p /home/.history/.mpl
-RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/home/.history/.bash_history" \
-    && echo "$SNIPPET" >> "/root/.bashrc"
+#RUN mkdir -p /home/.history
+#RUN mkdir -p /home/.history/.ipython
+#RUN mkdir -p /home/.history/.mpl
+#RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/home/.history/.bash_history" \
+#    && echo "$SNIPPET" >> "/root/.bashrc"
 
 WORKDIR /tf
 
