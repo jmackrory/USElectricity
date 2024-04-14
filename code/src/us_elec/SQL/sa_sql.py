@@ -18,66 +18,22 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column, scoped_session, sessionmaker
 import tqdm
 
+from us_elec.SQL.constants import (
+    AIR_SIGN_PATH,
+    EBA_NAME_PATH,
+    DATA_DIR,
+    TableName,
+    ColName,
+    EBAAbbr,
+    YEARS,
+    get_eba_names,
+    get_air_names,
+)
+
 
 SQLBase = declarative_base()
 DBSession = scoped_session(sessionmaker())
 engine = None
-
-
-DATA_DIR = "/tf/data"
-
-AIR_SIGN_PATH = "./meta/air_signs.csv"
-EBA_NAME_PATH = "./meta/iso_names.csv"
-
-YEARS = list(range(2015, 2024))
-
-
-class TableName:
-    # note: must correspond to sqlalchemy base table names.
-    EBA = "eba"
-    INTER = "eba_inter"
-    EBA_META = "eba_meta"
-    EBA_MEASURE = "eba_measure"
-    ISD = "ISD"
-    ISD_META = "isd_meta"
-    ISD_MEASURE = "isd_measure"
-
-
-class ColName:
-    abbr = "abbr"
-    full_name = "full_name"
-    source_id = "source_id"
-    dest_id = "dest_id"
-    measure_id = "measure_id"
-    val = "val"
-
-
-class EBAAbbr:
-    # measure names for EBA
-    NG = "Net Generation"
-    ID = "Net Interchange"
-    DF = "Demand Forecast"
-    D = "Demand"
-    TI = "Total Interchange"
-
-
-class EBAGenAbbr:
-    # measure names for subtypes of EBA generation
-    COL = "Generation - Coal"
-    WAT = "Generation - Hydro"
-    NG = "Generation - Natural Gas"
-    NUC = "Generation - Nuclear"
-    OIL = "Generation - Oil"
-    OTH = "Generation - Other"
-    SUN = "Generation - Solar"
-    TOT = "Generation - Total"
-    WND = "Generation - Wind"
-
-
-class EBAExtra:
-    # measure names for other regions
-    CAN = "Canada (region)"
-    MEX = "Mexico (region)"
 
 
 @lru_cache()
@@ -88,25 +44,6 @@ def get_cls_attr_dict(cls):
 @lru_cache()
 def get_reverse_cls_attr_dict(cls):
     return {v: k for k, v in cls.__dict__.items() if not k.startswith("__")}
-
-
-@lru_cache(1)
-def get_air_names(fn=AIR_SIGN_PATH):
-    with open(fn, "r") as fp:
-        return fp.readlines()
-
-
-@lru_cache(1)
-def get_eba_names(fn=EBA_NAME_PATH):
-    with open(fn, "r") as fp:
-        return fp.readlines()
-
-
-def get_engine():
-    db, pw, user = get_creds()
-    # us db, pw, user
-    engine = create_engine("postgres+psycopg2://db:5432")
-    return engine
 
 
 def get_creds():
@@ -123,9 +60,16 @@ def get_creds():
     return db, pw, user
 
 
-def init_sqlalchemy(dbname="sqlite:///sqlalchemy.db"):
+def get_engine():
+    db, pw, user = get_creds()
+    # us db, pw, user
+    engine = create_engine(f"postgres+psycopg2://{user}/{pw}@localhost:5432/{db}")
+    return engine
+
+
+def init_sqlalchemy():
     global engine
-    engine = create_engine(dbname, echo=False)
+    engine = get_engine()
     DBSession.remove()
     DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
 
@@ -141,6 +85,8 @@ def create_tables():
 
 
 class ISDDF:
+    """Utilities for loading in DataFrames from ISD Data"""
+
     # ISD column names
     TIME = "time"
     YEAR = ("year",)
@@ -199,6 +145,13 @@ class ISDDF:
         return out_data
 
 
+#########################################################
+#
+# EBA SQL Alchemy Tables
+#
+#########################################################
+
+
 class EBA(SQLBase):
     """SQLAlchemy table for EBA Data"""
 
@@ -235,6 +188,13 @@ class EBAMeasure(SQLBase):
     abbr = Mapped[str]
 
 
+#########################################################
+#
+# ISD SQL Alchemy Tables
+#
+#########################################################
+
+
 class ISD(SQLBase):
     __tablename__ = TableName.ISD
     ts = Mapped[datetime]
@@ -262,8 +222,15 @@ eba_index = Index("eba_idx", EBA.ts, EBA.measure_id, EBA.call_id)
 inter_index = Index("inter_idx", EBAInter.ts, EBAInter.source_id)
 isd_index = Index("isd_idx", ISD.ts, ISD.measure_id, ISD.call_id)
 
+
+def create_indexes():
+    eba_index.create(bind=engine)
+    inter_index.create(bind=engine)
+    isd_index.create(bind=engine)
+
+
 # if __name__ == '__main__':
-#    eba_index.create(bind=engine)
+#     create_indexes()
 
 
 class EBAData:
@@ -409,6 +376,7 @@ class EBAData:
                     cols, unique_list, data_list = self._get_regular_sql_inputs(
                         dat, Ntime=Ntime
                     )
+                # TODO: Needs to be overhauled for SQLAlchemy
                 self.sqldr.insert_data_column(
                     table_name=table_name,
                     col_list=cols,
@@ -424,6 +392,7 @@ class EBAData:
         self.sqldr.commit()
 
     def _get_interchange_sql_inputs(self, dat, Ntime=-1):
+        # Overhaul for SQLAlchemy
         source, dest, tag, _ = self.parse_eba_series_id(dat["series_id"])
         # print(dat["name"], dat["series_id"], source, dest, tag)
         source_id = self.get_eba_source_id(source, dat["name"])
@@ -440,6 +409,7 @@ class EBAData:
         return cols, unique_list, data_list
 
     def _get_regular_sql_inputs(self, dat: Dict, Ntime: int = -1):
+        # TODO: Overhaul for SQLAlchemy
         source, dest, tag, _ = self.parse_eba_series_id(dat["series_id"])
         # dest_id = self.get_eba_source_id(dest)
         # print(dat["name"], dat["series_id"], source, dest, tag)
@@ -463,12 +433,14 @@ class EBAData:
 
     @classmethod
     def get_data_insert_str(cls, x, source_id, measure_id):
+        # TODO: Probably not necessary for SQLALchemy?
         if x[1]:
             return f"('{cls.parse_time_str(x[0])}', {source_id}, {measure_id}, {x[1]})"
         else:
             return f"('{cls.parse_time_str(x[0])}', {source_id}, {measure_id}, NULL)"
 
     def get_eba_source_id(self, source, name, dpth=0):
+        # TODO: Overhaul for SQLAlchemy
         qry_str = (
             f"SELECT id FROM {EBAName.ISO_META} WHERE {ColName.ABBR} = '{source}';"
         )
@@ -486,6 +458,7 @@ class EBAData:
         return source_id[0][0]
 
     def get_eba_measure_id(self, measure):
+        # TODO: Update For SQLAlchemy
         qry_str = (
             f"SELECT id FROM {EBAName.MEASURE} WHERE {ColName.ABBR} = '{measure}';"
         )
@@ -493,3 +466,7 @@ class EBAData:
         if not measure_id:
             raise RuntimeError(f"No measure found for {measure}")
         return measure_id[0][0]
+
+
+class ISDData:
+    pass

@@ -8,3 +8,7 @@ data/*
 .mypy*
 .history
 *egg-info
+uselec_module/*
+.env
+.en/*
+*pytest_cache*
