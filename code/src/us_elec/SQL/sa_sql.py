@@ -19,130 +19,19 @@ from sqlalchemy.orm import Mapped, mapped_column, scoped_session, sessionmaker
 import tqdm
 
 from us_elec.SQL.constants import (
-    AIR_SIGN_PATH,
-    EBA_NAME_PATH,
-    DATA_DIR,
+    EBAExtra,
+    EBAGenAbbr,
     TableName,
     ColName,
     EBAAbbr,
     YEARS,
-    get_eba_names,
-    get_air_names,
 )
+from us_elec.SQL.sqldriver import get_creds, get_cls_attr_dict
 
 
 SQLBase = declarative_base()
 DBSession = scoped_session(sessionmaker())
 engine = None
-
-
-@lru_cache()
-def get_cls_attr_dict(cls):
-    return {k: v for k, v in cls.__dict__.items() if not k.startswith("__")}
-
-
-@lru_cache()
-def get_reverse_cls_attr_dict(cls):
-    return {v: k for k, v in cls.__dict__.items() if not k.startswith("__")}
-
-
-def get_creds():
-    db = os.environ.get("PG_DEV_DB", None)
-    if not db:
-        raise RuntimeError("SQLDriver could not find Postgres DB Name")
-
-    pw = os.environ.get("PG_DEV_PASSWORD", "")
-    if not pw:
-        raise RuntimeError("SQLDriver could not find Postgres DB Password")
-    user = os.environ.get("PG_DEV_USER", "")
-    if not user:
-        raise RuntimeError("SQLDriver could not find Postgres DB User")
-    return db, pw, user
-
-
-def get_engine():
-    db, pw, user = get_creds()
-    # us db, pw, user
-    engine = create_engine(f"postgres+psycopg2://{user}/{pw}@localhost:5432/{db}")
-    return engine
-
-
-def init_sqlalchemy():
-    global engine
-    engine = get_engine()
-    DBSession.remove()
-    DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
-
-
-def drop_tables():
-    global engine
-    SQLBase.metadata.drop_all(engine)
-
-
-def create_tables():
-    global engine
-    SQLBase.metadata.create_all(engine)
-
-
-class ISDDF:
-    """Utilities for loading in DataFrames from ISD Data"""
-
-    # ISD column names
-    TIME = "time"
-    YEAR = ("year",)
-    MONTH = ("month",)
-    DAY = ("day",)
-    HOUR = ("hour",)
-    TEMPERATURE = "temp"
-    DEW_TEMPERATURE = "dew_temp"
-    PRESSURE = "pressure"
-    WIND_DIR = "wind_dir"
-    WIND_SPEED = "wind_spd"
-    CLOUD_COVER = "cloud_cov"
-    PRECIP_1HR = "precip_1hr"
-    PRECIP_6HR = "precip_6hr"
-
-    ISD_COLS = [
-        TIME,
-        TEMPERATURE,
-        DEW_TEMPERATURE,
-        PRESSURE,
-        WIND_DIR,
-        WIND_SPEED,
-        CLOUD_COVER,
-        PRECIP_1HR,
-        PRECIP_6HR,
-    ]
-    ind_name_lookup = {i: name for i, name in enumerate(ISD_COLS)}
-    name_ind_lookup = {name: i for i, name in ind_name_lookup.items()}
-
-    @classmethod
-    def load_fwf_isd_file(cls, filename: str) -> List[List]:
-        """Load ISD FWF datafile in directly.
-        Currently relying on space between entries.
-        """
-        with gzip.open(filename, "r") as gz:
-            lines = gz.readlines()
-            vals = [[cls.parse_val(x) for x in L.split()] for L in lines]
-            out_list = [cls.parse_times(V) for V in vals]
-        return out_list
-
-    @classmethod
-    def parse_val(cls, x, null_vals=[-999, -9999]):
-        ix = int(x)
-        return ix if ix not in null_vals else None
-
-    @classmethod
-    def parse_times(cls, V):
-        tstr = f"{V[0]}-{V[1]:02}-{V[2]:02}T{V[3]:02}:00:00"
-        out_list = [tstr] + V[4:]
-        return out_list
-
-    @classmethod
-    def get_cols(cls, cols: List[str], data_list: List[List]) -> List:
-        col_ind = [cls.name_ind_lookup[x] for x in cols]
-        out_data = [[x[i] for i in col_ind] for x in data_list]
-        return out_data
 
 
 #########################################################
@@ -217,8 +106,32 @@ class ISDMeasure(SQLBase):
     abbr = Mapped[str]
 
 
+def get_engine():
+    db, pw, user = get_creds()
+    # us db, pw, user
+    engine = create_engine(f"postgres+psycopg2://{user}/{pw}@localhost:5432/{db}")
+    return engine
+
+
+def init_sqlalchemy():
+    global engine
+    engine = get_engine()
+    DBSession.remove()
+    DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+def create_tables():
+    global engine
+    SQLBase.metadata.create_all(engine)
+
+
+def drop_tables():
+    global engine
+    SQLBase.metadata.drop_all(engine)
+
+
 # Create indexes afterwards to allow bulk inserts without updating indexing.
-eba_index = Index("eba_idx", EBA.ts, EBA.measure_id, EBA.call_id)
+eba_index = Index("eba_idx", EBA.ts, EBA.measure_id, EBA.source_id)
 inter_index = Index("inter_idx", EBAInter.ts, EBAInter.source_id)
 isd_index = Index("isd_idx", ISD.ts, ISD.measure_id, ISD.call_id)
 
@@ -229,8 +142,10 @@ def create_indexes():
     isd_index.create(bind=engine)
 
 
-# if __name__ == '__main__':
-#     create_indexes()
+def drop_indexes():
+    eba_index.drop(bind=engine)
+    inter_index.drop(bind=engine)
+    isd_index.drop(bind=engine)
 
 
 class EBAData:
@@ -304,7 +219,6 @@ class EBAData:
         # iso_map = self.load_iso_dict_json()
         df = self.load_metadata()
         iso_map = self.parse_metadata(df)
-
         more_names = get_cls_attr_dict(EBAExtra)
 
         data_list = [
@@ -333,7 +247,7 @@ class EBAData:
         time = sub[-1]
         return source, dest, tag, time
 
-    def read_metadata(self):
+    def read_metadata(self) -> List:
         """Read in name / series_ids."""
         # load files one by one.
         # if in desired type, then insert.
@@ -347,7 +261,14 @@ class EBAData:
                 out_list.append((dat["name"], dat["series_id"]))
         return out_list
 
-    def load_data(self, Nseries=-1, Ntime=-1, bulk=True, update=False, Ncommit=50):
+    def load_data(
+        self,
+        Nseries: int = -1,
+        Ntime: int = -1,
+        bulk: bool = True,
+        update: bool = False,
+        Ncommit: int = 50,
+    ):
         """Load in relevant data series.  Only keep the ones on UTC time."""
 
         int_re = re.compile("Actual Net Interchange")
@@ -401,11 +322,7 @@ class EBAData:
         cols = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID, ColName.VAL]
         unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID]
         sub_data = dat["data"][:Ntime]
-        data_list = [
-            self.get_data_insert_str(x, source_id, dest_id)
-            # f"('{self.parse_time_str(x[0])}', {source_id}, {dest_id}, {x[1]})"
-            for x in sub_data
-        ]
+        data_list = [self.get_data_insert_str(x, source_id, dest_id) for x in sub_data]
         return cols, unique_list, data_list
 
     def _get_regular_sql_inputs(self, dat: Dict, Ntime: int = -1):
@@ -442,7 +359,7 @@ class EBAData:
     def get_eba_source_id(self, source, name, dpth=0):
         # TODO: Overhaul for SQLAlchemy
         qry_str = (
-            f"SELECT id FROM {EBAName.ISO_META} WHERE {ColName.ABBR} = '{source}';"
+            f"SELECT id FROM {TableName.EBA_META} WHERE {ColName.ABBR} = '{source}';"
         )
         source_id = self.sqldr.get_data(qry_str)
 
@@ -459,9 +376,7 @@ class EBAData:
 
     def get_eba_measure_id(self, measure):
         # TODO: Update For SQLAlchemy
-        qry_str = (
-            f"SELECT id FROM {EBAName.MEASURE} WHERE {ColName.ABBR} = '{measure}';"
-        )
+        qry_str = f"SELECT id FROM {TableName.EBA_MEASURE} WHERE {ColName.ABBR} = '{measure}';"
         measure_id = self.sqldr.get_data(qry_str)
         if not measure_id:
             raise RuntimeError(f"No measure found for {measure}")

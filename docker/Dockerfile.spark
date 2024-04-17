@@ -34,8 +34,8 @@ RUN make
 #RUN ctest
 RUN make install
 
-COPY docker/requirements.spark.txt /home/requirements.spark.txt
-RUN pip install --upgrade -r /home/requirements.spark.txt
+COPY docker/requirements /home/requirements
+RUN pip install --upgrade -r /home/requirements/base.txt
 
 # Install module code in editable form.  src set to also allow mounting host-machine dir
 COPY code /home/code

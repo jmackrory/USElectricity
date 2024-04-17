@@ -20,3 +20,4 @@ cfgrib==0.9.10.3
 setuptools<60
 boto3
 pytest
+coverage

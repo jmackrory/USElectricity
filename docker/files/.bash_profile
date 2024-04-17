@@ -1,6 +1,8 @@
+echo "LOADING CUSTOM BASH PROFILE GENIUSES!\n"
+
 
 run_tests(){
-    python -m unittest coverage discover -s /home/code/tests
+    python -m unittest coverage discover /home/code/tests
 }
 
 run_jupyter_serv(){

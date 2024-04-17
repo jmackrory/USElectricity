@@ -37,8 +37,8 @@ RUN make install
 
 #RUN /usr/bin/python3 -m pip install --upgrade pip
 
-COPY docker/requirements.tf.txt /home/requirements.tf.txt
-RUN pip install --upgrade -r /home/requirements.tf.txt
+COPY docker/requirements /home/requirements
+RUN pip install --upgrade -r /home/requirements/requirements.tf.txt
 
 # Install module code in editable form.  src set to also allow mounting host-machine dir
 COPY code /home/code
@@ -48,8 +48,8 @@ RUN pip install -e . --src /home/edit-src
 
 COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
 COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_config.py
-COPY docker/files/.bash_profile /root/.bash_profile
-RUN cat /root/.bash_profile >> /root/.bashrc
+COPY docker/files/.bash_profile /home/.bash_profile
+RUN cat /home/.bash_profile >> /home/.bashrc
 
 ENV JUPYTER_CONFIG_DIR=/root/.jupyter
 ENV PYTHON_PATH="$PYTHON_PATH:/tf"

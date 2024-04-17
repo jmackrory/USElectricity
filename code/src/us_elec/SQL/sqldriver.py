@@ -14,18 +14,18 @@ from functools import lru_cache
 from us_elec.util.get_weather_data import get_local_isd_path
 from us_elec.SQL.constants import (
     SQLVar,
-    TableType,
     EBAAbbr,
     EBAGenAbbr,
     EBAExtra,
     ColName,
     TableName,
-    AIR_SIGN_PATH,
-    EBA_NAME_PATH,
     YEARS,
-    get_air_names,
-    get_eba_names,
 )
+
+
+ALLOWED_TYPES = [SQLVar.int, SQLVar.float]
+
+DATA_DIR = "/tf/data"
 
 
 class ISDDF:
@@ -85,11 +85,6 @@ class ISDDF:
         col_ind = [cls.name_ind_lookup[x] for x in cols]
         out_data = [[x[i] for i in col_ind] for x in data_list]
         return out_data
-
-
-ALLOWED_TYPES = [SQLVar.int, SQLVar.float]
-
-DATA_DIR = "/tf/data"
 
 
 @lru_cache()
