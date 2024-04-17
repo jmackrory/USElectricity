@@ -14,6 +14,7 @@ repos:
   rev: v1.3.0
   hooks:
   - id: mypy
+    plugins: ["sqlmypy"]
     additional_dependencies: [types-tensorflow==2.11.0,
-      data-science-types, types-requests]
+      data-science-types, types-requests, sqlalchemy-stubs]
       # need these for mypy stubs.

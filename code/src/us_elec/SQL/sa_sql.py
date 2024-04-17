@@ -45,36 +45,38 @@ class EBA(SQLBase):
     """SQLAlchemy table for EBA Data"""
 
     __tablename__ = TableName.EBA
-    ts = Mapped[datetime]
-    source_id = Mapped[int]
-    measure_id = Mapped[int]
-    val = Mapped[float]
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime]
+    source_id: Mapped[int]
+    measure_id: Mapped[int]
+    val: Mapped[float]
 
 
 class EBAInter(SQLBase):
     """SQLAlchemy table for EBA Interchange Data"""
 
-    __tablename__ = TableName.INTER
-    ts = Mapped[datetime]
-    source_id = Mapped[int]
-    dest_id = Mapped[int]
-    val = Mapped[float]
+    __tablename__ = TableName.INTERCHANGE
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime]
+    source_id: Mapped[int]
+    dest_id: Mapped[int]
+    val: Mapped[float]
 
 
 class EBAMeta(SQLBase):
     """SQLAlchemy table for EBA MetaData"""
 
     __tablename__ = TableName.EBA_META
-    id = Mapped[int] = mapped_column(primary_key=True)
-    full_name = Mapped[str]
-    abbr = Mapped[str]
+    id: Mapped[int] = mapped_column(primary_key=True)
+    full_name: Mapped[str]
+    abbr: Mapped[str]
 
 
 class EBAMeasure(SQLBase):
     __tablename__ = TableName.EBA_MEASURE
-    id = Mapped[int] = mapped_column(primary_key=True)
-    full_name = Mapped[str]
-    abbr = Mapped[str]
+    id: Mapped[int] = mapped_column(primary_key=True)
+    full_name: Mapped[str]
+    abbr: Mapped[str]
 
 
 #########################################################
@@ -86,30 +88,30 @@ class EBAMeasure(SQLBase):
 
 class ISD(SQLBase):
     __tablename__ = TableName.ISD
-    ts = Mapped[datetime]
-    call_id = Mapped[int]
-    measure_id = Mapped[int]
-    val = Mapped[float]
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime]
+    call_id: Mapped[int]
+    measure_id: Mapped[int]
+    val: Mapped[float]
 
 
 class ISDMeta(SQLBase):
     __tablename__ = TableName.ISD_META
-    id = Mapped[int] = mapped_column(primary_key=True)
-    full_name = Mapped[str]
-    abbr = Mapped[str]
+    id: Mapped[int] = mapped_column(primary_key=True)
+    full_name: Mapped[str]
+    abbr: Mapped[str]
 
 
 class ISDMeasure(SQLBase):
     __tablename__ = TableName.ISD_MEASURE
-    id = Mapped[int] = mapped_column(primary_key=True)
-    full_name = Mapped[str]
-    abbr = Mapped[str]
+    id: Mapped[int] = mapped_column(primary_key=True)
+    full_name: Mapped[str]
+    abbr: Mapped[str]
 
 
 def get_engine():
     db, pw, user = get_creds()
-    # us db, pw, user
-    engine = create_engine(f"postgres+psycopg2://{user}/{pw}@localhost:5432/{db}")
+    engine = create_engine(f"postgresql+psycopg2://{user}/{pw}@localhost:5432/{db}")
     return engine
 
 
@@ -292,6 +294,7 @@ class EBAData:
                     cols, unique_list, data_list = self._get_interchange_sql_inputs(
                         dat, Ntime=Ntime
                     )
+
                 else:
                     table = EBA
                     cols, unique_list, data_list = self._get_regular_sql_inputs(
