@@ -37,12 +37,35 @@ To run test, launch a shell then
 
 Note: gpu version in `docker-compose.gpu.yml` with container `tfjupyter-gpu`
 
+### Root and Docker and Me
+
+Note: We're running Docker in rootless mode on the host and running as root inside the container.  It seems that you can't both be rootless on the host and not root inside the container.
+https://docs.docker.com/engine/security/rootless/
+
+Currently reliant on passing user uid and gid as mapping into the docker commands to map host user to root inside.
+Updated /etc/docker/daemon.json
+
+```
+{
+  "userns-remap": "testuser"
+}
+```
+
 #### VS Code and Jupyer
 - Best to have the Jupyter Dockerfile running before trying to use the VSCode jupyter notebook as it tries to login immediately if a notebook was previously open.
   (Otherwise it will fail to login, and you have to force it to log-in again.)
 - Use Jupyter plugin to log in to remote `localhost:8890`.  Note that it may be necessary to
 Clear the Remote Server List.
 - It's also important to make sure you select the Docker container environment kernel, as otherwise it will run in the local environment.
+
+#### 07/04
+TODO:
+- rationalize packaging and todos
+- get sql_alchemy tests going.
+  - get test fixture data for a subset of ISD data
+- tests failing as "user does not exist" when trying to run sql_alchemy.  Back to dealing with Docker and users.
+
+- created tfuser in Docker.  Will move stuff that was under root to that folder.
 
 #### 4/14 Setting up SQL logins.
 - need to run the commands to create the non-root users from docker/files/sql/init.sql
@@ -51,13 +74,13 @@ Clear the Remote Server List.
 - note the Docker may automatically create root user and you need to create the other users directly via the docker-compose.  (annoying oversight: passing in the default users will skip the regular init.sql)
 - run `docker compose -f docker/docker-compose.yml up`
 - run `docker comose -f docker/docker-compose.yml exec postgres /bin/bash` to get shell as root in postgres container
-- run `psql -U postgres -f docker-entrypoint-initdb.d/init.sql` to create the DBs and respective dev/test users 
+- run `psql -U postgres -f docker-entrypoint-initdb.d/init.sql` to create the DBs and respective dev/test users
 
 Moving to SQLAlchemy rather than making my own crummy API.
 
 #### Spark
 Adding skeleton for spark notebooks in Docker.
-Will talk to same DBs/storage.   
+Will talk to same DBs/storage.
 
 ### Emacs and Jupyter - Emacs IPython Notebook (EIN)
 

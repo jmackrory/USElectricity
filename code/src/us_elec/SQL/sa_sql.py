@@ -14,7 +14,7 @@ from datetime import datetime
 import jsonlines
 import pandas as pd
 from sqlalchemy import Index, create_engine, insert
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import Mapped, mapped_column, scoped_session, sessionmaker
 import tqdm
 

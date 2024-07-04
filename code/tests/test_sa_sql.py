@@ -19,7 +19,7 @@ def get_conn_db(conn):
     conn_ps = conn.get_dsn_parameters().get("dbname")
 
 
-@patch("us_elec.SQL.sqldriver.get_creds", get_mock_creds)
+@patch("us_elec.SQL.sa_sql.get_creds", get_mock_creds)
 class Tests(TestCase):
     @classmethod
     def setUpClass(cls):

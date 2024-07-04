@@ -39,6 +39,7 @@ services:
       - ../code:/home/code
       - ../.jupyter:/root/.jupyter
       - ../.history:/home/.history
+      - ../.pytest_cache:/home/.pytest_cache
       - ~/.aws:/root/.aws
     ports:
       - 8890:8888

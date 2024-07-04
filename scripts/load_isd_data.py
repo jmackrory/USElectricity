@@ -1,4 +1,5 @@
 # Timing note: Took 32 min single threaded for 600 stations, 3 variables, and 8 years (2015-2023)
+# Need to update to new setup.
 
 from argparse import ArgumentParser
 from us_elec.SQL.sqldriver import ISDMeta
