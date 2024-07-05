@@ -1,8 +1,8 @@
-echo "LOADING CUSTOM BASH PROFILE GENIUSES!\n"
+printf "LOADING CUSTOM BASH PROFILE GENIUSES!\n"
 
 
 run_tests(){
-    python -m unittest coverage discover /home/code/tests
+    python -m pytest /home/code/tests
 }
 
 run_jupyter_serv(){
@@ -12,6 +12,5 @@ run_jupyter_serv(){
      --no-browser \
      --allow-root \
      --NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net \
-     --notebook-dir /tf/
-
+     --notebook-dir /home/tfuser/notebooks
 }

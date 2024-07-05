@@ -39,6 +39,9 @@ engine = None
 # EBA SQL Alchemy Tables
 #
 #########################################################
+def cool_func():
+    creds = get_creds()
+    print(creds)
 
 
 class EBA(SQLBase):
@@ -109,15 +112,16 @@ class ISDMeasure(SQLBase):
     abbr: Mapped[str]
 
 
-def get_engine():
-    db, pw, user = get_creds()
-    engine = create_engine(f"postgresql+psycopg2://{user}/{pw}@localhost:5432/{db}")
+def get_engine(creds):
+    db, pw, user = creds
+    print(f"Creating Engine for {user} in {db}")
+    engine = create_engine(f"postgresql+psycopg2://{user}:{pw}@localhost:5432/{db}")
     return engine
 
 
-def init_sqlalchemy():
+def init_sqlalchemy(creds):
     global engine
-    engine = get_engine()
+    engine = get_engine(creds)
     DBSession.remove()
     DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
 

@@ -22,7 +22,7 @@ services:
       context: ../
       args:
         TF_IMAGE: 2.11.0-gpu-jupyter
-    #user: ${DOCKER_UID:-1000}:${DOCKER_GID:-1000}
+    #user: ${Docker_Uid:-1000}:${Docker_Gid:-1000}
     environment:
       PG_DEV_PASSWORD: ${PG_DEV_PASSWORD}
       PG_DEV_USER: ${PG_DEV_USER}
@@ -33,14 +33,14 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes:
-      - ../data:/tf/data
-      - ../notebooks:/tf/notebooks
-      - ../scripts:/tf/scripts
+      - ../data:/home/tfuser/data
+      - ../notebooks:/home/tfuser/notebooks
+      - ../scripts:/home/tfuser/scripts
       - ../code:/home/code
-      - ../.jupyter:/root/.jupyter
-      - ../.history:/home/.history
-      - ../.pytest_cache:/home/.pytest_cache
-      - ~/.aws:/root/.aws
+      - ../.jupyter:/home/tfuser/.jupyter
+      - ../.history:/home/tfuser/.history
+      - ../.pytest_cache:/home/tfuser/.pytest_cache
+      - ~/.aws:/home/tfuser/.aws
     ports:
       - 8890:8888
     deploy:
@@ -58,7 +58,7 @@ services:
       "--no-browser",
       "--allow-root",
       "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net",
-      "--notebook-dir", "/tf"]
+      "--notebook-dir", "/home/tfuser/notebooks"]
 
   # spark-notebook:
   #   depends_on:

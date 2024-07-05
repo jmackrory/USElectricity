@@ -67,6 +67,14 @@ TODO:
 
 - created tfuser in Docker.  Will move stuff that was under root to that folder.
 
+Ran from host machine
+`sudo setfacl -Rm d:u:1000:rwX,u:1000:rwX ./data`
+`sudo setfacl -Rm d:u:1000:rwX,u:1000:rwX ./notebooks`
+`sudo setfacl -Rm d:u:1000:rwX,u:1000:rwX ./history`
+`sudo setfacl -Rm d:u:1000:rwX,u:1000:rwX ./pytest_cache`
+
+Not sure that actually did aynthing.  Changing user to tfuser in Docker still led to permissions errors without read/write access.
+
 #### 4/14 Setting up SQL logins.
 - need to run the commands to create the non-root users from docker/files/sql/init.sql
 - need to give them permissions.

@@ -1,4 +1,3 @@
-import os
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -27,23 +26,30 @@ class Tests(TestCase):
 
         r0 = subprocess.run("id")
         print(r0)
-
-        init_sqlalchemy()
+        test_creds = get_mock_creds()
+        init_sqlalchemy(test_creds)
         create_tables()
-        create_indexes()
+        # create_indexes()
 
     @classmethod
     def tearDownClass(cls):
-        drop_tables()
-        eba_db = cls.eba.sqldr.get_db_name()
-        if eba_db == "test":
-            cls.eba.drop_tables(execute=True)
-            cls.eba.drop_indexes()
+        pass
+        # drop_tables()
+        # eba_db = cls.eba.sqldr.get_db_name()
+        # if eba_db == "test":
+        #    cls.eba.drop_tables(execute=True)
+        #   cls.eba.drop_indexes()
 
-        isd_db = cls.isd.sqldr.get_db_name()
-        if isd_db == "test":
-            cls.isd.drop_tables(execute=True)
-            cls.isd.drop_indexes()
+        # isd_db = cls.isd.sqldr.get_db_name()
+        # if isd_db == "test":
+        #    cls.isd.drop_tables(execute=True)
+        #    cls.isd.drop_indexes()
+
+    def test_creds(self):
+        from us_elec.SQL.sa_sql import cool_func
+
+        cool_func()
+        self.assertTrue(True)
 
     def test_basic(self):
         print("in sa_sql tests")
