@@ -1,11 +1,11 @@
 import random
 from datetime import datetime
 from typing import NamedTuple, Optional
+
 import numpy as np
-
 import pandas as pd
-
-from us_elec.SQL.sqldriver import ISDDF, ColName, EBAAbbr, EBAName, ISDName, SQLDriver
+from us_elec.SQL.constants import TableName
+from us_elec.SQL.sqldriver import ISDDF, ColName, EBAAbbr, SQLDriver, get_creds
 
 
 class Key:
@@ -84,7 +84,7 @@ class OldRecord:
 
 class SimpleDataSet(DataSet):
     def __init__(self, **kwargs):
-        self.sqldr = SQLDriver()
+        self.sqldr = SQLDriver(get_creds())
         # So, saved using variable names of classes as labels in SQL
         # so need the name of variable as string to look up results.
         # self.ed = get_reverse_cls_attr_dict(EBAAbbr)
@@ -92,9 +92,9 @@ class SimpleDataSet(DataSet):
 
     def get_eba_record(self, meas: str, t1: str, t2: str):
         sql = f"""
-        SELECT e.{ColName.TS}, im.{ColName.ABBR}, e.{ColName.VAL} FROM {EBAName.EBA} AS e
-        INNER JOIN {EBAName.ISO_META} AS im ON {ColName.SOURCE_ID} = im.{ColName.ID}
-        INNER JOIN {EBAName.MEASURE} AS me ON {ColName.MEASURE_ID} = me.{ColName.ID}
+        SELECT e.{ColName.TS}, im.{ColName.ABBR}, e.{ColName.VAL} FROM {TableName.EBA} AS e
+        INNER JOIN {TableName.EBA_META} AS im ON {ColName.SOURCE_ID} = im.{ColName.ID}
+        INNER JOIN {TableName.EBA_MEASURE} AS me ON {ColName.MEASURE_ID} = me.{ColName.ID}
         WHERE (
             (e.{ColName.TS} > '{t1}') AND
             (e.{ColName.TS} <= '{t2}') AND
@@ -117,9 +117,9 @@ class SimpleDataSet(DataSet):
 
     def get_isd_record(self, meas, t1, t2):
         sql = f"""
-        SELECT isd.{ColName.TS}, am.{ColName.CALL}, isd.{ColName.VAL} FROM {ISDName.ISD} AS isd
-        INNER JOIN {ISDName.AIR_META} AS am ON {ColName.CALL_ID} = am.{ColName.ID}
-        INNER JOIN {ISDName.MEASURE} AS me ON {ColName.MEASURE_ID} = me.{ColName.ID}
+        SELECT isd.{ColName.TS}, am.{ColName.CALL}, isd.{ColName.VAL} FROM {TableName.ISD} AS isd
+        INNER JOIN {TableName.ISD_META} AS am ON {ColName.CALL_ID} = am.{ColName.ID}
+        INNER JOIN {TableName.ISD_MEASURE} AS me ON {ColName.MEASURE_ID} = me.{ColName.ID}
         WHERE (
             (isd.{ColName.TS} > '{t1}') AND
             (isd.{ColName.TS} <= '{t2}') AND
@@ -138,7 +138,8 @@ class SimpleDataSet(DataSet):
         return df
 
     def get_temp_forecast(self, t1):
-        path = self._get_forecast(t1, ftype)
+        pass
+        # path = self._get_forecast(t1)
         # get relevant forecast
         # load forecast
         # extract relevant pieces

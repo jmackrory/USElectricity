@@ -13,7 +13,7 @@ DOCKERFILE=Dockerfile.tfjupyter
 
 exec_tf_container(){
     # may need to export these and set as env variables
-    docker compose -f $COMPOSE_YML exec -u $(id -u):$(id -g) $CONTAINER_NAME /bin/bash -c "source /home/.bashrc && /bin/bash -l"
+    docker compose -f $COMPOSE_YML exec $CONTAINER_NAME /bin/bash
 }
 
 build_joint_container(){

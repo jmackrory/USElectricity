@@ -2,26 +2,23 @@ import gzip
 import json
 import os
 import re
-from typing import Dict, List, Optional
-import jsonlines
-
-import psycopg2
-import pandas as pd
-from tqdm import tqdm
-
 from functools import lru_cache
+from typing import Dict, List, Optional
 
-from us_elec.util.get_weather_data import get_local_isd_path
+import jsonlines
+import pandas as pd
+import psycopg2
+from tqdm import tqdm
 from us_elec.SQL.constants import (
-    SQLVar,
-    EBAAbbr,
-    EBAGenAbbr,
-    EBAExtra,
-    ColName,
-    TableName,
     YEARS,
+    ColName,
+    EBAAbbr,
+    EBAExtra,
+    EBAGenAbbr,
+    SQLVar,
+    TableName,
 )
-
+from us_elec.util.get_weather_data import get_local_isd_path
 
 ALLOWED_TYPES = [SQLVar.int, SQLVar.float]
 
@@ -113,7 +110,7 @@ class EBAMeta:
         self.eba_filename = os.path.join(eba_path, self.EBA_FILE)
         self.meta_file = os.path.join(eba_path, self.META_FILE)
         self.iso_file_map = os.path.join(eba_path, self.ISO_NAME_FILE)
-        self.sqldr = SQLDriver()
+        self.sqldr = SQLDriver(get_creds())
 
     def extract_meta_data(self):
         # need checking on location and if file exists
@@ -427,7 +424,7 @@ class ISDMeta:
     ):
         self.meta_file = meta_file
         self.sign_file = sign_file
-        self.sqldr = SQLDriver()
+        self.sqldr = SQLDriver(get_creds())
         self.ISD_TABLES = [TableName.ISD]
         self.ISD_MEASURES = [
             ISDDF.TEMPERATURE,
@@ -653,13 +650,12 @@ def get_creds():
 
 
 class SQLDriver:
-    def __init__(self):
-        self.conn = self.get_connection()
+    def __init__(self, creds):
+        self.conn = self.get_connection(creds)
 
-    def get_connection(self):
+    def get_connection(self, creds):
         """Get default connection"""
-        db, pw, user = get_creds()
-
+        db, pw, user = creds
         # pg_url = f"postgres://db:5432"
         conn = psycopg2.connect(
             dbname=db, user=user, password=pw, host="postgres", port=5432

@@ -43,36 +43,33 @@ RUN make install
 COPY docker/requirements /home/requirements
 RUN pip install --upgrade -r /home/requirements/requirements.tf.txt
 
-RUN useradd -rm -d /home/tfuser -s /bin/bash -g root -G sudo -u ${DOCKER_UID} tfuser
-
 # Install module code in editable form.  src set to also allow mounting host-machine dir
-COPY code /home/code
-WORKDIR /home/code
-RUN mkdir /home/.pytest_cache
+RUN mkdir /home/root
+COPY code /home/root/code
+WORKDIR /home/root/code
+RUN mkdir /home/root/.pytest_cache
 RUN pip install -e . --src /home/edit-src
 
-#USER tfuser
-
-COPY docker/files/00start.py /home/tfuser/.ipython/profile_default/startup/00start.py
-COPY docker/files/ipython_config.py /home/tfuser/.ipython/profile_default/ipython_config.py
-COPY docker/files/.bash_profile /home/tfuser/.bash_profile
+COPY docker/files/00start.py /home/root/.ipython/profile_default/startup/00start.py
+COPY docker/files/ipython_config.py /home/root/.ipython/profile_default/ipython_config.py
+COPY docker/files/.bash_profile /home/root/.bash_profile
 #COPY .jupyter/jupyter_notebook_config* /home/tfuser/.jupyter
-RUN cat /home/tfuser/.bash_profile >> /home/tfuser/.bashrc
 
-ENV JUPYTER_CONFIG_DIR=/home/tfuser/.jupyter
+ENV JUPYTER_CONFIG_DIR=/home/root/.jupyter
 #ENV PYTHON_PATH="$PYTHON_PATH:/tf"
-ENV IPYTHONDIR="/home/tfuser/.history/.ipython"
-ENV MPLCONFIGDIR="/home/tfuser/.history/.mpl"
+ENV IPYTHONDIR="/home/root/.history/.ipython"
+ENV MPLCONFIGDIR="/home/root/.history/.mpl"
 
 # store bash history
-RUN mkdir -p /home/tfuser/.history
-RUN mkdir -p /home/tfuser/.history/.ipython
-RUN mkdir -p /home/tfuser/.history/.mpl
-RUN SNIPPET="\nexport PROMPT_COMMAND='history -a' && export HISTFILE=/home/tfuser/.history/.bash_history" \
+RUN mkdir -p /home/root/.history
+RUN mkdir -p /home/root/.history/.ipython
+RUN mkdir -p /home/root/.history/.mpl
+
+RUN cat /home/root/.bash_profile >> /root/.bashrc
+RUN SNIPPET="\nexport PROMPT_COMMAND='history -a' && export HISTFILE=/home/root/.history/.bash_history" \
     && printf "$SNIPPET" >> "/root/.bashrc"
 
-
-WORKDIR /home/tfuser
+WORKDIR /home/root
 
 CMD ["/usr/local/bin/jupyter", \
      "notebook", \
@@ -81,4 +78,4 @@ CMD ["/usr/local/bin/jupyter", \
      "--no-browser", \
      "--allow-root", \
      "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net", \
-     "--notebook-dir", "/home/tfuser/notebooks"]
+     "--notebook-dir", "/home/root/notebooks"]

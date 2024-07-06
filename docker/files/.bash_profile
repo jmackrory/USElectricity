@@ -2,7 +2,7 @@ printf "LOADING CUSTOM BASH PROFILE GENIUSES!\n"
 
 
 run_tests(){
-    python -m pytest /home/code/tests
+    python -m pytest -Rp /home/root/code/tests
 }
 
 run_jupyter_serv(){
@@ -12,5 +12,5 @@ run_jupyter_serv(){
      --no-browser \
      --allow-root \
      --NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net \
-     --notebook-dir /home/tfuser/notebooks
+     --notebook-dir /home/root/notebooks
 }

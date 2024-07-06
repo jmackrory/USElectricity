@@ -11,7 +11,7 @@ less concern about affecting other DBs on the personal machine.
 
 
 ## Running Docker setup
-- change dir to root of project
+- change dir to root directory of project
 build container:
 `docker compose -f docker/docker-compose.yml build`
 
@@ -37,7 +37,7 @@ To run test, launch a shell then
 
 Note: gpu version in `docker-compose.gpu.yml` with container `tfjupyter-gpu`
 
-### Root and Docker and Me
+## Root and Docker and Me
 
 Note: We're running Docker in rootless mode on the host and running as root inside the container.  It seems that you can't both be rootless on the host and not root inside the container.
 https://docs.docker.com/engine/security/rootless/
@@ -51,14 +51,16 @@ Updated /etc/docker/daemon.json
 }
 ```
 
-#### VS Code and Jupyer
+## VS Code and Jupyer
 - Best to have the Jupyter Dockerfile running before trying to use the VSCode jupyter notebook as it tries to login immediately if a notebook was previously open.
   (Otherwise it will fail to login, and you have to force it to log-in again.)
 - Use Jupyter plugin to log in to remote `localhost:8890`.  Note that it may be necessary to
 Clear the Remote Server List.
 - It's also important to make sure you select the Docker container environment kernel, as otherwise it will run in the local environment.
 
-#### 07/04
+## Daily Notes
+
+### 07/04
 TODO:
 - rationalize packaging and todos
 - get sql_alchemy tests going.
@@ -75,7 +77,14 @@ Ran from host machine
 
 Not sure that actually did aynthing.  Changing user to tfuser in Docker still led to permissions errors without read/write access.
 
-#### 4/14 Setting up SQL logins.
+When execing in, I had been passing in user arguments, as suggested by TF Container.
+`docker compose -f $COMPOSE_YML exec -u $(id -u):$(id -g) $CONTAINER_NAME /bin/bash`
+But I could not write.  I think their advice is for rootful docker.
+With
+`docker compose -f $COMPOSE_YML exec $CONTAINER_NAME /bin/bash`
+I end up running the container as root, but files created on host are owned by regular user.
+
+### 4/14 Setting up SQL logins.
 - need to run the commands to create the non-root users from docker/files/sql/init.sql
 - need to give them permissions.
 - probably best to blow away the old stuff by running `rm -r ../docker_data/postgres-data`
@@ -86,7 +95,7 @@ Not sure that actually did aynthing.  Changing user to tfuser in Docker still le
 
 Moving to SQLAlchemy rather than making my own crummy API.
 
-#### Spark
+### Spark
 Adding skeleton for spark notebooks in Docker.
 Will talk to same DBs/storage.
 
@@ -205,7 +214,7 @@ Still seems like lots of room for improvement there.
   Optimized by eliminating pandas in reading data, unique constraint on SQL, and simplifying where.
   Cut time by 2/3.
 
-## May 23
+### May 23
 - Moved library code around to src layout with setup.cfg
   (Motivated by need to allow scripts using library code to run and import code)
   Gave up on pyproject.toml as editable support is annoying.
@@ -217,7 +226,7 @@ Still seems like lots of room for improvement there.
    from the module directory works.
 - created local virtual_env on host machine to install to allow better editting experience with VSCode with libraries.
 
-## Mar 16
+### Mar 16
 
 Copied dev over to new mac.
 This lacks a GPU, so need to handle GPU/non-GPU builds of Docker
@@ -229,7 +238,7 @@ present.
 
 So, will make two docker-compose files.
 
-## Mar 9/10
+### Mar 9/10
 
 - Sketch out the table structure and desired library.
 - Hit issue trying to login to SQL.
@@ -241,7 +250,7 @@ So, will make two docker-compose files.
 - had to set 'postgres' as hostname when connecting inside docker.
 - then username/pw/db work as expected
 
-## Mar 8
+### Mar 8
 
 - Matplotlib inline in EIN:
   %matplotlib inline
@@ -267,12 +276,12 @@ c = get_config()
 - Can use `xarray` and `cfgrib` to read files.  Need eccode binaries installed.
 
 
-## Mar 6
+### Mar 6
 - Maybe move from mounting 'us_elec'?  Done
 - Need to provide a "runbook" for loading in the data.
 
 
-# Mar 2
+### Mar 2
 - Running into issues trying to login to local jupyter server.  This is true with docker, but also when just trying to run
 Jupyter in local linux environment.
 - might need https going?
@@ -285,22 +294,22 @@ Note: Need to change the kernel to the notebooks Kernel, otherwise it would just
 
 - Can also change the output in VSCode to be from specific plugins (e.g. Jupyter) in the terminal.
 
-## Feb 26
+### Feb 26
 Added password (to avoid unique token nonsense) to serve results.  Adjusted to mount local .jupyter file.
 May have to give up an just use Emacs for Jupyter again since VSCode for linux is sub-par on support.
 
-## Feb 23
+### Feb 23
 - Got it to work by just mounting files into /tf directory.  Can create files and edit them now.
 - Can run JupyterLab?  Not sure it's worth the hassle if we can just use VSCode (which is far more comfortable for editting)
 - I think VSCode will prove annoying while trying to attach to Jupyter running inside a Docker container.
 
-## Feb 15
+### Feb 15
 Tried FastAPI container to try debugging what was up with networking.
 
 Note that you need to use "up" not "run" to bring up the machine and networks
 and actually run the whole server
 
-## Feb 14
+### Feb 14
 
 Got jupyter running inside container with new command.
 Having issues accessing outside the container?
@@ -316,7 +325,7 @@ Using command
       "--allow-root"]
 is not working?  port doesn't seem to be there on host machine?
 
-## Feb 11, 2022
+### Feb 11, 2022
 - migrated uid/gid in docker-compose to use .env file.
 - successfully got docker-compose to work for building TF, Postgres
 Todo:
@@ -327,8 +336,7 @@ Todo:
     - test tensorflow
     - move
 
-
-## Feb 2022 - Docker
+### Feb 2022 - Docker
 - Migrating to Docker on local dev.  Useful tech, also decoupled from
 annoyances of maintaining Tensorflow drivers and virtual environments etc.
 - Will be using PostgresSQL and MongoDB Containers

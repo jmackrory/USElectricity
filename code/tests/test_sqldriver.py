@@ -2,13 +2,8 @@ import os
 from unittest import TestCase
 from unittest.mock import patch
 
-from us_elec.SQL.sqldriver import EBAMeta, ISDMeta, SQLDriver
-
 from tests.utilities import get_mock_creds
-
-
-def get_conn_db(conn):
-    conn_ps = conn.get_dsn_parameters().get("dbname")
+from us_elec.SQL.sqldriver import EBAMeta, ISDMeta, SQLDriver
 
 
 @patch("us_elec.SQL.sqldriver.get_creds", get_mock_creds)
@@ -24,7 +19,8 @@ class Tests(TestCase):
         # cls.eba.create_meta_table()
         cls.isd = ISDMeta()
         cls.isd.create_tables()
-        pass
+
+        cls.sqldr = SQLDriver(get_mock_creds())
 
     @classmethod
     def tearDownClass(cls):
@@ -42,7 +38,10 @@ class Tests(TestCase):
         self.assertEqual(2 + 2, 4)
 
     def test_mock(self):
-        sql = SQLDriver()
-        conn_ps = sql.conn.get_dsn_parameters()
+        conn_ps = self.sqldr.conn.get_dsn_parameters()
         print(conn_ps)
         self.assertTrue(conn_ps["dbname"] == "test")
+
+    def test_select(self):
+        rv = self.sqldr.get_data("SELECT * FROM ISD_META LIMIT 5")
+        print(rv)
