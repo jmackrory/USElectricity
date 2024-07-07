@@ -1,19 +1,19 @@
+import logging
 import os
 import sys
-from typing import List, Optional
-
-import logging
 from datetime import datetime
 from time import time
+from typing import List, Optional
 
 import boto3
+from us_elec.SQL.constants import DATA_DIR
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger()
 
 NDFD_BUCKET = "noaa-ndfd-pds"
 
-NDFD_LOCAL_DIR = "/tf/data/NDFD"
+NDFD_LOCAL_DIR = os.path.join(DATA_DIR, "NDFD")
 
 # start 2020/4/16
 SUB_TYPES = {"temp": "YEU", "wdir": "YBU", "wspd": "YCU", "sky": "YAU"}

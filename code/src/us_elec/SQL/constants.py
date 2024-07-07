@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-DATA_DIR = "/tf/data"
+DATA_DIR = "/home/root/data"
 AIR_SIGN_PATH = "./meta/air_signs.csv"
 EBA_NAME_PATH = "./meta/iso_names.csv"
 

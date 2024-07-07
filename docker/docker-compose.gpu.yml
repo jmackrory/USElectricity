@@ -82,13 +82,13 @@ services:
   #     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
   #   # check paths for spark.
   #   volumes:
-  #     - ../data:/tf/data
-  #     - ../notebooks:/tf/notebooks
-  #     - ../scripts:/tf/scripts
-  #     - ../code:/home/code
-  #     - ../.jupyter:/root/.jupyter
-  #     - ../.history:/home/.history
-  #     - ~/.aws:/root/.aws
+  #     - ../data:/home/root/data
+  #     - ../notebooks:/home/root/notebooks
+  #     - ../scripts:/home/root/scripts
+  #     - ../code:/home/root/code
+  #     - ../.jupyter:/home/root/.jupyter
+  #     - ../.history:/home/root/.history
+  #     - ~/.aws:/home/root/.aws
   #   ports:
   #     - 8890:8888
   #   command: ["/usr/local/bin/jupyter",
@@ -98,7 +98,7 @@ services:
   #     "--no-browser",
   #     "--allow-root",
   #     "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net",
-  #     "--notebook-dir", "/tf"]
+  #     "--notebook-dir", "/home/root/notebooks"]
 
   #mongo:
   #  image: mongo

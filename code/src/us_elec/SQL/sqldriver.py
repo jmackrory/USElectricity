@@ -2,6 +2,7 @@ import gzip
 import json
 import os
 import re
+from collections import namedtuple
 from functools import lru_cache
 from typing import Dict, List, Optional
 
@@ -10,6 +11,7 @@ import pandas as pd
 import psycopg2
 from tqdm import tqdm
 from us_elec.SQL.constants import (
+    DATA_DIR,
     YEARS,
     ColName,
     EBAAbbr,
@@ -22,7 +24,31 @@ from us_elec.util.get_weather_data import get_local_isd_path
 
 ALLOWED_TYPES = [SQLVar.int, SQLVar.float]
 
-DATA_DIR = "/tf/data"
+Creds = namedtuple("Creds", ["db", "pw", "user"])
+
+
+def get_creds():
+    db = os.environ.get("PG_DEV_DB", None)
+    if not db:
+        raise RuntimeError("SQLDriver could not find Postgres DB Name")
+
+    pw = os.environ.get("PG_DEV_PASSWORD", "")
+    if not pw:
+        raise RuntimeError("SQLDriver could not find Postgres DB Password")
+    user = os.environ.get("PG_DEV_USER", "")
+    if not user:
+        raise RuntimeError("SQLDriver could not find Postgres DB User")
+    return Creds(db, pw, user)
+
+
+@lru_cache()
+def get_cls_attr_dict(cls):
+    return {k: v for k, v in cls.__dict__.items() if not k.startswith("__")}
+
+
+@lru_cache()
+def get_reverse_cls_attr_dict(cls):
+    return {v: k for k, v in cls.__dict__.items() if not k.startswith("__")}
 
 
 class ISDDF:
@@ -84,33 +110,25 @@ class ISDDF:
         return out_data
 
 
-@lru_cache()
-def get_cls_attr_dict(cls):
-    return {k: v for k, v in cls.__dict__.items() if not k.startswith("__")}
+class EBADriver:
 
-
-@lru_cache()
-def get_reverse_cls_attr_dict(cls):
-    return {v: k for k, v in cls.__dict__.items() if not k.startswith("__")}
-
-
-class EBAMeta:
     """Class for extracting metadata about EBA dataset and saving to disk"""
 
     EBA_FILE = "EBA.txt"
     META_FILE = "metaseries.txt"
     ISO_NAME_FILE = "iso_name_file.json"
-
+    NAME = "EBADriver"
     EBA_TABLES = [
         TableName.EBA,
         TableName.INTERCHANGE,
     ]
 
-    def __init__(self, eba_path="/tf/data/EBA/EBA20230302/"):
+    def __init__(self, sql_creds, eba_path="EBA/EBA20230302/"):
+        eba_path = os.path.join(DATA_DIR, eba_path)
         self.eba_filename = os.path.join(eba_path, self.EBA_FILE)
         self.meta_file = os.path.join(eba_path, self.META_FILE)
         self.iso_file_map = os.path.join(eba_path, self.ISO_NAME_FILE)
-        self.sqldr = SQLDriver(get_creds())
+        self.sqldr = SQLDriver(sql_creds)
 
     def extract_meta_data(self):
         # need checking on location and if file exists
@@ -414,17 +432,20 @@ class EBAMeta:
         return measure_id[0][0]
 
 
-class ISDMeta:
+class ISDDriver:
     """Utils for getting Airport sensor data, setting up sql tables and loading data in."""
+
+    NAME = "ISDDriver"
 
     def __init__(
         self,
-        meta_file="/tf/data/air_merge_df.csv.gz",
-        sign_file="/tf/data/air_signs.csv",
+        sql_creds,
+        meta_file="air_merge_df.csv.gz",
+        sign_file="air_signs.csv",
     ):
-        self.meta_file = meta_file
-        self.sign_file = sign_file
-        self.sqldr = SQLDriver(get_creds())
+        self.meta_file = os.path.join(DATA_DIR, meta_file)
+        self.sign_file = os.path.join(sign_file)
+        self.sqldr = SQLDriver(sql_creds)
         self.ISD_TABLES = [TableName.ISD]
         self.ISD_MEASURES = [
             ISDDF.TEMPERATURE,
@@ -470,7 +491,7 @@ class ISDMeta:
 
         # data table to store measure names.
         meta_table_create = f"""
-        CREATE TABLE IF NOT EXISTS {TableName.MEASURE}
+        CREATE TABLE IF NOT EXISTS {TableName.ISD_MEASURE}
         (id SMALLSERIAL,
         measure varchar(20) UNIQUE
         );
@@ -483,6 +504,7 @@ class ISDMeta:
 
     def populate_isd_meta(self):
         """Populate SQL table with Airport metadata from Pandas DF.  Also populate measure table"""
+        print("Loading ISD Meta Data")
         air_df = self.get_air_meta_df()
         data_cols = ["name", "City", "ST", "CALL", "USAF", "WBAN", "LAT", "LON"]
         sub_data = air_df[data_cols].values.tolist()
@@ -504,6 +526,7 @@ class ISDMeta:
         data_strings = [format_insert_str(D, col_types) for D in sub_data]
         # effectively do nothing on conflict.
         val_col = ColName.CALL
+        print("Inserting Data to ISD Meta")
         self.sqldr.insert_data_column(
             table_name=TableName.ISD_META,
             data=data_strings,
@@ -522,7 +545,7 @@ class ISDMeta:
         print(data_list)
         cols = ["id", "measure"]
         self.sqldr.insert_data_column(
-            table_name=TableName.MEASURE,
+            table_name=TableName.ISD_MEASURE,
             col_list=cols,
             data=data_list,
             unique_list=[ColName.MEASURE],
@@ -635,30 +658,20 @@ class ISDMeta:
             return f"('{x[0]}', {callsign}, {measure}, NULL)"
 
 
-def get_creds():
-    db = os.environ.get("PG_DEV_DB", None)
-    if not db:
-        raise RuntimeError("SQLDriver could not find Postgres DB Name")
-
-    pw = os.environ.get("PG_DEV_PASSWORD", "")
-    if not pw:
-        raise RuntimeError("SQLDriver could not find Postgres DB Password")
-    user = os.environ.get("PG_DEV_USER", "")
-    if not user:
-        raise RuntimeError("SQLDriver could not find Postgres DB User")
-    return db, pw, user
-
-
 class SQLDriver:
     def __init__(self, creds):
         self.conn = self.get_connection(creds)
 
-    def get_connection(self, creds):
+    def get_connection(self, creds: Creds):
         """Get default connection"""
         db, pw, user = creds
         # pg_url = f"postgres://db:5432"
         conn = psycopg2.connect(
-            dbname=db, user=user, password=pw, host="postgres", port=5432
+            dbname=creds.db,
+            user=creds.user,
+            password=creds.pw,
+            host="postgres",
+            port=5432,
         )
         return conn
 
@@ -748,6 +761,8 @@ class SQLDriver:
 
     def get_data(self, sql_qry: str) -> Optional[List]:
         """Execute a select query and return results."""
+        if not sql_qry.endswith(";"):
+            sql_qry += ";"
         with self.conn.cursor() as cur:
             try:
                 cur.execute(sql_qry)

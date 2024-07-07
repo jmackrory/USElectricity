@@ -2,7 +2,8 @@
 # Need to update to new setup.
 
 from argparse import ArgumentParser
-from us_elec.SQL.sqldriver import ISDMeta
+
+from us_elec.SQL.sqldriver import ISDDriver, get_creds
 
 
 def create_isd_tables_and_load_isd_data():
@@ -12,7 +13,7 @@ def create_isd_tables_and_load_isd_data():
     parser.add_argument("--Ntime", type=int, default=-1)
     args = parser.parse_args()
 
-    isdm = ISDMeta()
+    isdm = ISDDriver(get_creds())
     if args.drop_tables is True:
         print("Dropping ISD Tables!")
         isdm.drop_tables(execute=True)

@@ -1,18 +1,18 @@
 # Download data sets from NOAA.
 # See weather_dataframe.py for converting this data into a combined dataframe.
-from time import sleep
-from ftplib import FTP
 import os
-import requests
 import urllib
+from ftplib import FTP
+from time import sleep
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-
+import numpy as np
+import pandas as pd
+import requests
 from tqdm import tqdm
+from us_elec.SQL.constants import DATA_DIR
 
 # FTP_CONNECTIONS = {}
 FTP_NOAA = "ftp.ncdc.noaa.gov"
@@ -78,9 +78,8 @@ region_dict = {
     "WY": "Northwest",
 }
 
-DATA_PATH = "/tf/data"
-AIR_CSV = os.path.join(DATA_PATH, "airports.csv")
-ISD_HISTORY = os.path.join(DATA_PATH, "ISD/isd-history.txt")
+AIR_CSV = os.path.join(DATA_DIR, "airports.csv")
+ISD_HISTORY = os.path.join(DATA_DIR, "ISD/isd-history.txt")
 
 START_YR_MONTH = "2015-07"
 END_YR_MONTH = "2023-03"
@@ -272,7 +271,7 @@ def isd_filename(yearstr, USAF, WBAN):
 
 
 def get_local_isd_path(yearstr, usaf, wban):
-    return os.path.join(DATA_PATH, "ISD", isd_filename(yearstr, usaf, wban))
+    return os.path.join(DATA_DIR, "ISD", isd_filename(yearstr, usaf, wban))
 
 
 # # download weather data for all of the airports specified in aircode
@@ -554,8 +553,10 @@ def convert_all_isd(air_df):
 
 # make dataframes with codes.
 if __name__ == "__main__":
+    air_path = os.path.join(DATA_DIR, "air_code_df.gz")
+
     try:
-        air_df = pd.read_csv("/tf/data/air_code_df.gz")
+        air_df = pd.read_csv(air_path)
     except Exception as e:
         print("Didnt find prexisting air_code_df.  Computing directly.")
         print(e)
@@ -563,4 +564,4 @@ if __name__ == "__main__":
         isd_names = read_isd_df()
         air_df = merge_air_isd(airport_codes, isd_names)
         # write output to csv
-        air_df.to_csv("/tf/data/air_code_df.gz", compression="gzip", header=True)
+        air_df.to_csv(air_path, compression="gzip", header=True)

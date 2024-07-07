@@ -24,7 +24,7 @@ class DataSet:
         Nsample: int = 10000,
         test_split: float = 0.1,
         seed: int = 7653,
-        filepath: str = "/tf/data/check.json",
+        filepath: str = "check.json",
     ):
         self.start_date = start_date
         self.end_date = end_date
@@ -77,9 +77,6 @@ class OldRecord:
 
 
 # TODO: figure out json serializaiton / deserialization.
-
-# TODO: figure out current ds type hints (numpy, matplotlib, pandas, sklearn)
-# current use of data-science-types are ooollllddd.
 
 
 class SimpleDataSet(DataSet):

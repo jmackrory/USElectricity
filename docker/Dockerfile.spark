@@ -40,29 +40,29 @@ RUN pip install --upgrade -r /home/requirements/base.txt
 # Install module code in editable form.  src set to also allow mounting host-machine dir
 COPY code /home/code
 WORKDIR /home/code
-#RUN mkdir /tf/.pytest_cache
+#RUN mkdir /home/root/.pytest_cache
 RUN pip install -e . --src /home/edit-src
 
 #COPY docker/files/00start.py /root/.ipython/profile_default/startup/00start.py
 #COPY docker/files/ipython_config.py /root/.ipython/profile_default/ipython_config.py
-#COPY docker/files/.bash_profile /root/.bash_profile
+#COPY docker/files/.bash_profile /home/root/.bash_profile
 #RUN cat /root/.bash_profile >> /root/.bashrc
 
-#ENV JUPYTER_CONFIG_DIR=/root/.jupyter
+#ENV JUPYTER_CONFIG_DIR=/home/root/.jupyter
 #ENV PYTHON_PATH="$PYTHON_PATH:/tf"
-#ENV IPYTHONDIR="/home/.history/.ipython"
-#ENV MPLCONFIGDIR="/home/.history/.mpl"
+#ENV IPYTHONDIR="/home/root/.history/.ipython"
+#ENV MPLCONFIGDIR="/home/root/.history/.mpl"
 
 # store bash history
-#RUN mkdir -p /home/.history
-#RUN mkdir -p /home/.history/.ipython
-#RUN mkdir -p /home/.history/.mpl
-#RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/home/.history/.bash_history" \
+#RUN mkdir -p /home/root/.history
+#RUN mkdir -p /home/root/.history/.ipython
+#RUN mkdir -p /home/root/.history/.mpl
+#RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/home/root/.history/.bash_history" \
 #    && echo "$SNIPPET" >> "/root/.bashrc"
 
 USER jovyan
 
-WORKDIR /tf
+WORKDIR /home/root/notebooks
 
 CMD ["/usr/local/bin/jupyter", \
      "notebook", \
@@ -71,4 +71,4 @@ CMD ["/usr/local/bin/jupyter", \
      "--no-browser", \
      "--allow-root", \
      "--NotebookApp.allow_origin_pat=https://.*vscode-cdn\\.net", \
-     "--notebook-dir", "/tf/"]
+     "--notebook-dir", "/home/root/notebooks/"]

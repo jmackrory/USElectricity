@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
-from us_elec.SQL.sqldriver import EBAMeta
+
+from us_elec.SQL.sqldriver import EBADriver, get_creds
 
 
 def create_eba_tables_and_load_eba_data():
@@ -15,7 +16,7 @@ def create_eba_tables_and_load_eba_data():
     )
     args = parser.parse_args()
 
-    ebm = EBAMeta()
+    ebm = EBADriver(get_creds())
     if args.drop_tables is True:
         print("Dropping ISD Tables!")
         ebm.drop_tables(execute=True)

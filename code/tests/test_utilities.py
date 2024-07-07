@@ -1,4 +1,7 @@
 import os
+from collections import namedtuple
+
+from us_elec.SQL.sqldriver import Creds
 
 
 def get_mock_creds():
@@ -17,4 +20,4 @@ def get_mock_creds():
     user = os.environ.get("PG_TEST_USER", "")
     if not user:
         raise RuntimeError("SQLDriver could not find Test Postgres DB User")
-    return db, pw, user
+    return Creds(db, pw, user)

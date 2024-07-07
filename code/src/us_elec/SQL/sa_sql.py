@@ -3,31 +3,34 @@
  my own ORM/abstraction layers.
 
 """
-from functools import lru_cache
 import gzip
 import json
 import os
 import re
-from typing import Dict, List, Optional
-
 from datetime import datetime
+from functools import lru_cache
+from typing import Dict, List, Tuple
+
 import jsonlines
 import pandas as pd
-from sqlalchemy import Index, create_engine, insert
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import Mapped, mapped_column, scoped_session, sessionmaker
 import tqdm
-
+from sqlalchemy import Index, create_engine, insert
+from sqlalchemy.orm import (
+    Mapped,
+    declarative_base,
+    mapped_column,
+    scoped_session,
+    sessionmaker,
+)
 from us_elec.SQL.constants import (
+    YEARS,
+    ColName,
+    EBAAbbr,
     EBAExtra,
     EBAGenAbbr,
     TableName,
-    ColName,
-    EBAAbbr,
-    YEARS,
 )
-from us_elec.SQL.sqldriver import get_creds, get_cls_attr_dict
-
+from us_elec.SQL.sqldriver import Creds, get_cls_attr_dict
 
 SQLBase = declarative_base()
 DBSession = scoped_session(sessionmaker())
@@ -39,9 +42,6 @@ engine = None
 # EBA SQL Alchemy Tables
 #
 #########################################################
-def cool_func():
-    creds = get_creds()
-    print(creds)
 
 
 class EBA(SQLBase):
@@ -112,28 +112,34 @@ class ISDMeasure(SQLBase):
     abbr: Mapped[str]
 
 
-def get_engine(creds):
-    db, pw, user = creds
-    print(f"Creating Engine for {user} in {db}")
-    engine = create_engine(f"postgresql+psycopg2://{user}:{pw}@localhost:5432/{db}")
+def get_engine(creds: Creds):
+    print(f"Creating Engine for {creds.user} in {creds.db}")
+
+    engine = create_engine(
+        f"postgresql+psycopg2://{creds.user}:{creds.pw}@postgres:5432/{creds.db}"
+    )
     return engine
 
 
-def init_sqlalchemy(creds):
+def init_sqlalchemy(creds: Tuple[str]):
     global engine
     engine = get_engine(creds)
     DBSession.remove()
     DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
 
 
-def create_tables():
+def create_tables(db: str):
     global engine
-    SQLBase.metadata.create_all(engine)
+    if engine.url.database != db:
+        return
+    SQLBase.metadata.create_all(engine, checkfirst=True)
 
 
-def drop_tables():
+def drop_tables(db: str):
     global engine
-    SQLBase.metadata.drop_all(engine)
+    if engine.url.database != db:
+        return
+    SQLBase.metadata.drop_all(engine, checkfirst=True)
 
 
 # Create indexes afterwards to allow bulk inserts without updating indexing.
@@ -142,16 +148,23 @@ inter_index = Index("inter_idx", EBAInter.ts, EBAInter.source_id)
 isd_index = Index("isd_idx", ISD.ts, ISD.measure_id, ISD.call_id)
 
 
-def create_indexes():
-    eba_index.create(bind=engine)
-    inter_index.create(bind=engine)
-    isd_index.create(bind=engine)
+def create_indexes(db: str):
+    global engine
+    if engine.url.database != db:
+        return
+    for index in [eba_index, inter_index, isd_index]:
+        try:
+            index.create(bind=engine, checkfirst=True)
+        except Exception as e:
+            print(e)
 
 
-def drop_indexes():
-    eba_index.drop(bind=engine)
-    inter_index.drop(bind=engine)
-    isd_index.drop(bind=engine)
+def drop_indexes(db):
+    global engine
+    if engine.url.database != db:
+        return
+    for index in [eba_index, inter_index, isd_index]:
+        index.drop(bind=engine, checkfirst=True)
 
 
 class EBAData:
@@ -161,7 +174,7 @@ class EBAData:
     META_FILE = "metaseries.txt"
     ISO_NAME_FILE = "iso_name_file.json"
 
-    def __init__(self, eba_path="/tf/data/EBA/EBA20230302/"):
+    def __init__(self, eba_path="/home/root/data/EBA/EBA20230302/"):
         self.eba_filename = os.path.join(eba_path, self.EBA_FILE)
         self.meta_file = os.path.join(eba_path, self.META_FILE)
         self.iso_file_map = os.path.join(eba_path, self.ISO_NAME_FILE)
