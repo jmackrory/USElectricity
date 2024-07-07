@@ -266,7 +266,8 @@ def isd_filename(yearstr, USAF, WBAN):
     Make filename corresponding to zipped file names used in ISD database.
     """
     # put in some padding {:0>5} for shorter codes.
-    fn = "{1}-{2:0>5}-{0}.gz".format(yearstr, str(USAF), str(WBAN))
+    # fn = "{1}-{2:0>5}-{0}.gz".format(yearstr, str(USAF), str(WBAN))
+    fn = f"{USAF}-{WBAN:0>5}-{yearstr}.gz"
     return fn
 
 

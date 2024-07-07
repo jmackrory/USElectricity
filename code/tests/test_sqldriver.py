@@ -66,5 +66,5 @@ class Tests(TestCase):
 
     def test_select(self):
         # pytest.set_trace()
-        rv = self.sqldr.get_data("SELECT * FROM ISD_META LIMIT 5;")
+        rv = self.sqldr.get_data("SELECT * FROM AIRPORT LIMIT 5;")
         print(rv)

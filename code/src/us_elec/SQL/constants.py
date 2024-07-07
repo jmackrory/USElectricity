@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 
 DATA_DIR = "/home/root/data"
@@ -29,6 +30,7 @@ class TableName:
     ISD = "ISD"
     ISD_META = "isd_meta"
     ISD_MEASURE = "isd_measure"
+    AIRPORT = "airport"
 
 
 class ColName:
@@ -61,7 +63,7 @@ class EBAGenAbbr:
     # measure names for subtypes of EBA generation
     COL = "Generation - Coal"
     WAT = "Generation - Hydro"
-    NG = "Generation - Natural Gas"
+    GAS = "Generation - Natural Gas"
     NUC = "Generation - Nuclear"
     OIL = "Generation - Oil"
     OTH = "Generation - Other"
@@ -77,12 +79,14 @@ class EBAExtra:
 
 
 @lru_cache(1)
-def get_air_names(fn=AIR_SIGN_PATH):
+def get_air_names():
+    fn = os.path.join(DATA_DIR, AIR_SIGN_PATH)
     with open(fn, "r") as fp:
         return fp.readlines()
 
 
 @lru_cache(1)
-def get_eba_names(fn=EBA_NAME_PATH):
+def get_eba_names():
+    fn = os.path.join(DATA_DIR, EBA_NAME_PATH)
     with open(fn, "r") as fp:
         return fp.readlines()

@@ -9,20 +9,22 @@ import os
 import re
 from datetime import datetime
 from functools import lru_cache
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import jsonlines
 import pandas as pd
 import tqdm
-from sqlalchemy import Index, create_engine, insert
+from sqlalchemy import Index, create_engine, insert, select
 from sqlalchemy.orm import (
     Mapped,
+    Session,
     declarative_base,
     mapped_column,
     scoped_session,
     sessionmaker,
 )
 from us_elec.SQL.constants import (
+    DATA_DIR,
     YEARS,
     ColName,
     EBAAbbr,
@@ -30,11 +32,47 @@ from us_elec.SQL.constants import (
     EBAGenAbbr,
     TableName,
 )
-from us_elec.SQL.sqldriver import Creds, get_cls_attr_dict
+from us_elec.SQL.sqldriver import ISDDF, Creds, get_cls_attr_dict
+from us_elec.util.get_weather_data import get_local_isd_path
+
+# What exactly is going on here?
+# Is this a global session?  Should I not be using local, temporary sessions?
 
 SQLBase = declarative_base()
 DBSession = scoped_session(sessionmaker())
 engine = None
+
+isddf = ISDDF()
+
+
+def get_engine(creds: Creds):
+    print(f"Creating Engine for {creds.user} in {creds.db}")
+
+    engine = create_engine(
+        f"postgresql+psycopg2://{creds.user}:{creds.pw}@postgres:5432/{creds.db}"
+    )
+    return engine
+
+
+def init_sqlalchemy(creds: Tuple[str]):
+    global engine, DBSession
+    engine = get_engine(creds)
+    DBSession.remove()
+    DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+def create_tables(db: str):
+    global engine
+    if engine.url.database != db:
+        return
+    SQLBase.metadata.create_all(engine, checkfirst=True)
+
+
+def drop_tables(db: str):
+    global engine
+    if engine.url.database != db:
+        return
+    SQLBase.metadata.drop_all(engine, checkfirst=True)
 
 
 #########################################################
@@ -98,49 +136,30 @@ class ISD(SQLBase):
     val: Mapped[float]
 
 
-class ISDMeta(SQLBase):
-    __tablename__ = TableName.ISD_META
-    id: Mapped[int] = mapped_column(primary_key=True)
-    full_name: Mapped[str]
-    abbr: Mapped[str]
-
-
 class ISDMeasure(SQLBase):
     __tablename__ = TableName.ISD_MEASURE
     id: Mapped[int] = mapped_column(primary_key=True)
-    full_name: Mapped[str]
     abbr: Mapped[str]
 
 
-def get_engine(creds: Creds):
-    print(f"Creating Engine for {creds.user} in {creds.db}")
-
-    engine = create_engine(
-        f"postgresql+psycopg2://{creds.user}:{creds.pw}@postgres:5432/{creds.db}"
-    )
-    return engine
-
-
-def init_sqlalchemy(creds: Tuple[str]):
-    global engine
-    engine = get_engine(creds)
-    DBSession.remove()
-    DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
+class Airport(SQLBase):
+    __tablename__ = TableName.AIRPORT
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    city: Mapped[str]
+    state: Mapped[str]
+    callsign: Mapped[str]
+    usaf: Mapped[int]
+    wban: Mapped[int]
+    lat: Mapped[float]
+    lng: Mapped[float]
 
 
-def create_tables(db: str):
-    global engine
-    if engine.url.database != db:
-        return
-    SQLBase.metadata.create_all(engine, checkfirst=True)
-
-
-def drop_tables(db: str):
-    global engine
-    if engine.url.database != db:
-        return
-    SQLBase.metadata.drop_all(engine, checkfirst=True)
-
+###############################################################
+#
+#  Indexes
+#
+#################################################################
 
 # Create indexes afterwards to allow bulk inserts without updating indexing.
 eba_index = Index("eba_idx", EBA.ts, EBA.measure_id, EBA.source_id)
@@ -168,7 +187,7 @@ def drop_indexes(db):
 
 
 class EBAData:
-    """Class for extracting metadata about EBA dataset and saving to disk"""
+    """Class for extracting metadata about EBA dataset and saving to SQL"""
 
     EBA_FILE = "EBA.txt"
     META_FILE = "metaseries.txt"
@@ -241,23 +260,26 @@ class EBAData:
         more_names = get_cls_attr_dict(EBAExtra)
 
         data_list = [
-            {ColName.abbr: abbr, ColName.full_name: full_name}
+            {ColName.ABBR: abbr, ColName.FULL_NAME: full_name}
             for abbr, full_name in list(iso_map.items()) + list(more_names.items())
         ]
-        DBSession.execute(insert(EBAMeta), data_list)
+        with DBSession() as sess, sess.begin():
+            sess.execute(insert(EBAMeta), data_list)
 
         eba_names = get_cls_attr_dict(EBAAbbr)
         data_list = [
-            {ColName.abbr: abbr, ColName.full_name: full_name}
+            {ColName.ABBR: abbr, ColName.FULL_NAME: full_name}
             for abbr, full_name in eba_names.items()
         ]
+
         gen_names = get_cls_attr_dict(EBAGenAbbr)
         # hard-coded abbreviation munging
         data_list += [
-            {f"NG-{ColName.abbr}": abbr, ColName.full_name: full_name}
+            {ColName.ABBR: f"NG-{abbr}", ColName.FULL_NAME: full_name}
             for abbr, full_name in gen_names.items()
         ]
-        DBSession.execute(insert(EBAMeasure), data_list)
+        with DBSession() as sess, sess.begin():
+            sess.execute(insert(EBAMeasure), data_list)
 
     def parse_eba_series_id(self, str):
         sub = str.split(".")[1:]  # drop the EBA
@@ -396,12 +418,150 @@ class EBAData:
 
     def get_eba_measure_id(self, measure):
         # TODO: Update For SQLAlchemy
-        qry_str = f"SELECT id FROM {TableName.EBA_MEASURE} WHERE {ColName.ABBR} = '{measure}';"
-        measure_id = self.sqldr.get_data(qry_str)
-        if not measure_id:
-            raise RuntimeError(f"No measure found for {measure}")
+        measure_id = select(EBAMeasure.id).where(EBAMeasure.abbr == measure)
         return measure_id[0][0]
 
 
 class ISDData:
-    pass
+    """Utils for getting Airport sensor data, setting up sql tables and loading data in."""
+
+    NAME = "ISDData"
+
+    def __init__(
+        self,
+        meta_file="air_merge_df.csv.gz",
+        sign_file="air_signs.csv",
+    ):
+        self.meta_file = os.path.join(DATA_DIR, meta_file)
+        self.sign_file = os.path.join(DATA_DIR, sign_file)
+        self.ISD_TABLES = [TableName.ISD]
+        self.ISD_MEASURES = [
+            isddf.TEMP,
+            isddf.WIND_SPD,
+            isddf.PRECIP_1HR,
+        ]
+
+    def get_air_meta_df(self) -> pd.DataFrame:
+        air_df = pd.read_csv(self.meta_file, index_col=0)
+        return air_df
+
+    def save_callsigns(self):
+        df = self.get_air_meta_df()
+        df.sort_values(["ST", "CALL"])["CALL"].to_csv(
+            self.sign_file, header=True, index=False
+        )
+
+    @lru_cache()
+    def load_callsigns(self) -> List:
+        return pd.read_csv(self.sign_file)["CALL"].tolist()
+
+    def populate_isd_meta(self):
+        """Populate SQL table with Airport metadata from Pandas DF.  Also populate measure table"""
+
+        print("Loading ISD Meta Data")
+        air_df = self.get_air_meta_df()
+        data_cols = ["name", "City", "ST", "CALL", "USAF", "WBAN", "LAT", "LON"]
+        sub_data = air_df[data_cols].values.tolist()
+        cols = [
+            "name",
+            "city",
+            "state",
+            "callsign",
+            "usaf",
+            "wban",
+            "lat",
+            "lng",
+        ]
+        data_list = [{cols[i]: ri for i, ri in enumerate(row)} for row in sub_data]
+        with DBSession() as sess, sess.begin():
+            sess.execute(insert(Airport), data_list)
+
+    def populate_measures(self):
+        # populate measure table
+        data_list = [{ColName.ABBR: abbr} for abbr in isddf.ind_name_lookup.values()]
+        with DBSession() as sess, sess.begin():
+            sess.execute(insert(ISDMeasure), data_list)
+
+    def get_isd_filenames(
+        self, callsign_subset: Optional[Set[str]] = None
+    ) -> List[Tuple[str]]:
+        """Use ISD Meta table to build up known file list"""
+        with DBSession() as sess, sess.begin():
+            wban_usaf_list = sess.execute(
+                select(Airport.usaf, Airport.wban, Airport.callsign).order_by(
+                    Airport.callsign
+                )
+            )
+        file_list = []
+        for usaf, wban, callsign in wban_usaf_list:
+            if callsign_subset and callsign not in callsign_subset:
+                continue
+            for year in YEARS:
+                filename = get_local_isd_path(str(year), usaf, wban)
+                if os.path.exists(filename) and os.path.getsize(filename) > 0:
+                    file_list.append((filename, callsign))
+        return file_list
+
+    def load_data(
+        self,
+        callsign_subset=None,
+        Nstation: int = -1,
+        Ntime: int = -1,
+        Ncommit: int = 50,
+    ):
+        """Load data for each station by year and insert desired data into columns of relevant tables.
+        Tables / Columns governed by ISD_TABLES.  Converts all data timestamps appropriately to UTC.
+        Each table has columns for each callsign.
+        """
+        files = self.get_isd_filenames(callsign_subset)[:Nstation]
+
+        # out_sql = []
+
+        for file_count, (file, callsign) in enumerate(tqdm(files)):
+            # print(file, callsign)
+            # df = load_isd_df(file)
+            data_list = isddf.load_fwf_isd_file(file)
+            callsign_id = self.get_callsign_id(callsign)
+            for measure in self.ISD_MEASURES:
+                measure_id = self.get_measure_id(measure)
+                df_cols = [isddf.TIME, measure]
+                sub_data = isddf.get_cols(df_cols, data_list)[:Ntime]
+
+                data = [
+                    self.get_data_insert_str(x, callsign_id, measure_id)
+                    for x in sub_data
+                ]
+                cols = [ColName.TS, ColName.CALL_ID, ColName.MEASURE_ID, ColName.VAL]
+                unique_list = [ColName.TS, ColName.CALL_ID, ColName.MEASURE_ID]
+
+                self.sqldr.insert_data_column(
+                    table_name=TableName.ISD,
+                    col_list=cols,
+                    data=data,
+                    unique_list=unique_list,
+                    val_col=ColName.VAL,
+                    bulk=bulk,
+                    update=update,
+                )
+            if file_count % Ncommit == 0 and bulk:
+                self.sqldr.commit()
+        self.sqldr.commit()
+
+    def get_callsign_id(self, callsign: str) -> int:
+        rv = DBSession.scalars(
+            select(Airport.id).where(Airport.callsign == callsign)
+        ).first()
+        return rv
+
+    def get_measure_id(self, measure: str) -> int:
+        rv = DBSession.scalars(
+            select(ISDMeasure.id).where(ISDMeasure.abbr == measure)
+        ).first()
+        return rv
+
+    @classmethod
+    def get_data_insert_str(cls, x, callsign, measure):
+        if x[1]:
+            return f"('{x[0]}', {callsign}, {measure}, {x[1]})"
+        else:
+            return f"('{x[0]}', {callsign}, {measure}, NULL)"

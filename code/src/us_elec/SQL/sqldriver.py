@@ -51,68 +51,10 @@ def get_reverse_cls_attr_dict(cls):
     return {v: k for k, v in cls.__dict__.items() if not k.startswith("__")}
 
 
-class ISDDF:
-    # ISD column names
-    TIME = "time"
-    YEAR = ("year",)
-    MONTH = ("month",)
-    DAY = ("day",)
-    HOUR = ("hour",)
-    TEMPERATURE = "temp"
-    DEW_TEMPERATURE = "dew_temp"
-    PRESSURE = "pressure"
-    WIND_DIR = "wind_dir"
-    WIND_SPEED = "wind_spd"
-    CLOUD_COVER = "cloud_cov"
-    PRECIP_1HR = "precip_1hr"
-    PRECIP_6HR = "precip_6hr"
-
-    ISD_COLS = [
-        TIME,
-        TEMPERATURE,
-        DEW_TEMPERATURE,
-        PRESSURE,
-        WIND_DIR,
-        WIND_SPEED,
-        CLOUD_COVER,
-        PRECIP_1HR,
-        PRECIP_6HR,
-    ]
-    ind_name_lookup = {i: name for i, name in enumerate(ISD_COLS)}
-    name_ind_lookup = {name: i for i, name in ind_name_lookup.items()}
-
-    @classmethod
-    def load_fwf_isd_file(cls, filename: str) -> List[List]:
-        """Load ISD FWF datafile in directly.
-        Currently relying on space between entries.
-        """
-        with gzip.open(filename, "r") as gz:
-            lines = gz.readlines()
-            vals = [[cls.parse_val(x) for x in L.split()] for L in lines]
-            out_list = [cls.parse_times(V) for V in vals]
-        return out_list
-
-    @classmethod
-    def parse_val(cls, x, null_vals=[-999, -9999]):
-        ix = int(x)
-        return ix if ix not in null_vals else None
-
-    @classmethod
-    def parse_times(cls, V):
-        tstr = f"{V[0]}-{V[1]:02}-{V[2]:02}T{V[3]:02}:00:00"
-        out_list = [tstr] + V[4:]
-        return out_list
-
-    @classmethod
-    def get_cols(cls, cols: List[str], data_list: List[List]) -> List:
-        col_ind = [cls.name_ind_lookup[x] for x in cols]
-        out_data = [[x[i] for i in col_ind] for x in data_list]
-        return out_data
-
-
 class EBADriver:
-
-    """Class for extracting metadata about EBA dataset and saving to disk"""
+    """Class for extracting metadata about EBA dataset and saving to disk.
+    Uses Raw SQL with my own functions to generate the SQL via a cumbersome API
+    """
 
     EBA_FILE = "EBA.txt"
     META_FILE = "metaseries.txt"
@@ -432,6 +374,65 @@ class EBADriver:
         return measure_id[0][0]
 
 
+class ISDDF:
+    # ISD column names
+    TIME = "time"
+    YEAR = ("year",)
+    MONTH = ("month",)
+    DAY = ("day",)
+    HOUR = ("hour",)
+    TEMP = "temp"
+    DEW_TEMP = "dew_temp"
+    PRESSURE = "pressure"
+    WIND_DIR = "wind_dir"
+    WIND_SPD = "wind_spd"
+    CLOUD_COV = "cloud_cov"
+    PRECIP_1HR = "precip_1hr"
+    PRECIP_6HR = "precip_6hr"
+
+    ISD_COLS = [
+        TIME,
+        TEMP,
+        DEW_TEMP,
+        PRESSURE,
+        WIND_DIR,
+        WIND_SPD,
+        CLOUD_COV,
+        PRECIP_1HR,
+        PRECIP_6HR,
+    ]
+    ind_name_lookup = {i: name for i, name in enumerate(ISD_COLS)}
+    name_ind_lookup = {name: i for i, name in ind_name_lookup.items()}
+
+    @classmethod
+    def load_fwf_isd_file(cls, filename: str) -> List[List]:
+        """Load ISD FWF datafile in directly.
+        Currently relying on space between entries.
+        """
+        with gzip.open(filename, "r") as gz:
+            lines = gz.readlines()
+            vals = [[cls.parse_val(x) for x in L.split()] for L in lines]
+            out_list = [cls.parse_times(V) for V in vals]
+        return out_list
+
+    @classmethod
+    def parse_val(cls, x, null_vals=[-999, -9999]):
+        ix = int(x)
+        return ix if ix not in null_vals else None
+
+    @classmethod
+    def parse_times(cls, V):
+        tstr = f"{V[0]}-{V[1]:02}-{V[2]:02}T{V[3]:02}:00:00"
+        out_list = [tstr] + V[4:]
+        return out_list
+
+    @classmethod
+    def get_cols(cls, cols: List[str], data_list: List[List]) -> List:
+        col_ind = [cls.name_ind_lookup[x] for x in cols]
+        out_data = [[x[i] for i in col_ind] for x in data_list]
+        return out_data
+
+
 class ISDDriver:
     """Utils for getting Airport sensor data, setting up sql tables and loading data in."""
 
@@ -473,7 +474,7 @@ class ISDDriver:
     def create_isd_meta(self):
         # table for data about stations
         air_meta_create = f"""
-        CREATE TABLE IF NOT EXISTS {TableName.ISD_META}
+        CREATE TABLE IF NOT EXISTS {TableName.AIRPORT}
         (id integer,
         name varchar(100),
         city varchar(100),
@@ -528,7 +529,7 @@ class ISDDriver:
         val_col = ColName.CALL
         print("Inserting Data to ISD Meta")
         self.sqldr.insert_data_column(
-            table_name=TableName.ISD_META,
+            table_name=TableName.AIRPORT,
             data=data_strings,
             col_list=col_names,
             val_col=val_col,
@@ -578,7 +579,7 @@ class ISDDriver:
         execute is not True means only print commands.
         execute = True will execute, and drop the table!
         """
-        for table_name in [TableName.ISD, TableName.ISD_META]:
+        for table_name in [TableName.ISD, TableName.AIRPORT, TableName.ISD_MEASURE]:
             sql_comm = f"DROP TABLE IF EXISTS {table_name};"
             if execute is True:
                 print(f"Dropping table {table_name}!")
@@ -592,7 +593,7 @@ class ISDDriver:
     def get_isd_filenames(self):
         """Use ISD Meta table to build up known file list"""
         wban_usaf_list = self.sqldr.get_data(
-            f"SELECT USAF, WBAN, CALLSIGN FROM {TableName.ISD_META} ORDER BY CALLSIGN"
+            f"SELECT USAF, WBAN, CALLSIGN FROM {TableName.AIRPORT} ORDER BY CALLSIGN"
         )
         file_list = []
         for usaf, wban, callsign in wban_usaf_list:
@@ -642,7 +643,7 @@ class ISDDriver:
 
     def get_callsign_id(self, callsign):
         return self.sqldr.get_data(
-            f"SELECT {ColName.ID} FROM {TableName.ISD_META} WHERE {ColName.CALL}='{callsign}'"
+            f"SELECT {ColName.ID} FROM {TableName.AIRPORT} WHERE {ColName.CALL}='{callsign}'"
         )[0][0]
 
     def get_measure_id(self, measure):

@@ -115,7 +115,7 @@ class SimpleDataSet(DataSet):
     def get_isd_record(self, meas, t1, t2):
         sql = f"""
         SELECT isd.{ColName.TS}, am.{ColName.CALL}, isd.{ColName.VAL} FROM {TableName.ISD} AS isd
-        INNER JOIN {TableName.ISD_META} AS am ON {ColName.CALL_ID} = am.{ColName.ID}
+        INNER JOIN {TableName.AIRPORT} AS am ON {ColName.CALL_ID} = am.{ColName.ID}
         INNER JOIN {TableName.ISD_MEASURE} AS me ON {ColName.MEASURE_ID} = me.{ColName.ID}
         WHERE (
             (isd.{ColName.TS} > '{t1}') AND
