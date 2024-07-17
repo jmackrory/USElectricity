@@ -1,3 +1,4 @@
+import os
 import pytest
 from sqlalchemy import select
 from test_utilities import get_mock_creds
@@ -18,7 +19,7 @@ from us_elec.SQL.sa_sql import (
 from us_elec.SQL.sqldriver import ISDDF
 
 count = 0
-
+FIXTURE_PATH = "/home/root/code/tests/fixtures"
 
 class Tests:
     @classmethod
@@ -31,15 +32,27 @@ class Tests:
         test_creds = get_mock_creds()
         init_sqlalchemy(test_creds)
 
+        print('Drop Testing Tables')
+        drop_tables(test_creds.db)
+        print('Creating Testing Tables')
         create_tables(test_creds.db)
-        create_indexes(test_creds.db)
 
-        cls.EBAData = EBAData()
+        print('Populating EBA Data')
+        eba_path = os.path.join(FIXTURE_PATH, 'EBA')
+        cls.EBAData = EBAData(eba_path=eba_path)
+        cls.EBAData.extract_meta_data()
+        cls.EBAData.save_iso_dict_json()
         cls.EBAData.populate_meta_tables()
+        cls.EBAData.load_data()
 
-        cls.ISDData = ISDData()
+        print('Populating ISDData')
+        isd_path = os.path.join(FIXTURE_PATH, 'ISD')
+        cls.ISDData = ISDData(isd_path=isd_path)
         cls.ISDData.populate_isd_meta()
         cls.ISDData.populate_measures()
+
+        create_indexes(test_creds.db)
+
 
     @classmethod
     def teardown_class(cls):

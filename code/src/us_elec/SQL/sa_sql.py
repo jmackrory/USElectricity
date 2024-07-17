@@ -10,10 +10,10 @@ import re
 from datetime import datetime
 from functools import lru_cache
 from typing import Dict, List, Optional, Set, Tuple
+from tqdm import tqdm
 
 import jsonlines
 import pandas as pd
-import tqdm
 from sqlalchemy import Index, create_engine, insert, select
 from sqlalchemy.orm import (
     Mapped,
@@ -64,14 +64,18 @@ def init_sqlalchemy(creds: Tuple[str]):
 def create_tables(db: str):
     global engine
     if engine.url.database != db:
+        print(f'DataBase Does Not Match DB! {engine.url.database}, {db}')
         return
+    print(f'Creating Tables in {db}')
     SQLBase.metadata.create_all(engine, checkfirst=True)
 
 
 def drop_tables(db: str):
     global engine
     if engine.url.database != db:
+        print(f'DataBase Does Not Match DB! {engine.url.database}, {db}')
         return
+    print(f'Dropping Tables in {db}')
     SQLBase.metadata.drop_all(engine, checkfirst=True)
 
 
@@ -281,13 +285,6 @@ class EBAData:
         with DBSession() as sess, sess.begin():
             sess.execute(insert(EBAMeasure), data_list)
 
-    def parse_eba_series_id(self, str):
-        sub = str.split(".")[1:]  # drop the EBA
-        source, dest = sub[0].split("-")
-        tag = "-".join(sub[1:-1])
-        time = sub[-1]
-        return source, dest, tag, time
-
     def read_metadata(self) -> List:
         """Read in name / series_ids."""
         # load files one by one.
@@ -306,9 +303,6 @@ class EBAData:
         self,
         Nseries: int = -1,
         Ntime: int = -1,
-        bulk: bool = True,
-        update: bool = False,
-        Ncommit: int = 50,
     ):
         """Load in relevant data series.  Only keep the ones on UTC time."""
 
@@ -330,60 +324,48 @@ class EBAData:
 
                 if int_re.search(name):
                     table = EBAInter
-                    cols, unique_list, data_list = self._get_interchange_sql_inputs(
-                        dat, Ntime=Ntime
-                    )
-
+                    data_list = self._get_interchange_sql_inputs(dat, Ntime=Ntime)
                 else:
                     table = EBA
-                    cols, unique_list, data_list = self._get_regular_sql_inputs(
-                        dat, Ntime=Ntime
-                    )
-                # TODO: Needs to be overhauled for SQLAlchemy
-                self.sqldr.insert_data_column(
-                    table_name=table_name,
-                    col_list=cols,
-                    data=data_list,
-                    unique_list=unique_list,
-                    val_col=ColName.VAL,
-                    bulk=bulk,
-                    update=update,
-                )
-                if file_count % Ncommit == 0 and bulk:
-                    print("commiting")
-                    self.sqldr.commit()
-        self.sqldr.commit()
+                    data_list = self._get_regular_sql_inputs(dat, Ntime=Ntime)
+                with DBSession() as sess, sess.begin():
+                    sess.execute(insert(table), data_list)
+
+    def parse_eba_series_id(self, str):
+        sub = str.split(".")[1:]  # drop the EBA
+        source, dest = sub[0].split("-")
+        tag = "-".join(sub[1:-1])
+        time = sub[-1]
+        return source, dest, tag, time
 
     def _get_interchange_sql_inputs(self, dat, Ntime=-1):
         # Overhaul for SQLAlchemy
         source, dest, tag, _ = self.parse_eba_series_id(dat["series_id"])
-        # print(dat["name"], dat["series_id"], source, dest, tag)
-        source_id = self.get_eba_source_id(source, dat["name"])
-        dest_id = self.get_eba_source_id(dest, dat["name"])
+        source_id = self.get_eba_source_id(source)
+        dest_id = self.get_eba_source_id(dest)
 
-        cols = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID, ColName.VAL]
-        unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.DEST_ID]
         sub_data = dat["data"][:Ntime]
-        data_list = [self.get_data_insert_str(x, source_id, dest_id) for x in sub_data]
-        return cols, unique_list, data_list
+        data_list = [{ColName.TS:self.parse_time_str(x[0]),
+                      ColName.SOURCE_ID: source_id,
+                      ColName.DEST_ID: dest_id,
+                      ColName.VAL: x[1]}
+                      for x in sub_data]
+        return data_list
 
     def _get_regular_sql_inputs(self, dat: Dict, Ntime: int = -1):
         # TODO: Overhaul for SQLAlchemy
         source, dest, tag, _ = self.parse_eba_series_id(dat["series_id"])
-        # dest_id = self.get_eba_source_id(dest)
-        # print(dat["name"], dat["series_id"], source, dest, tag)
-        source_id = self.get_eba_source_id(source, dat["name"])
+        source_id = self.get_eba_source_id(source)
         measure_id = self.get_eba_measure_id(tag)
 
-        cols = [ColName.TS, ColName.SOURCE_ID, ColName.MEASURE_ID, ColName.VAL]
-        unique_list = [ColName.TS, ColName.SOURCE_ID, ColName.MEASURE_ID]
         sub_data = dat["data"][:Ntime]
-        data_list = [
-            self.get_data_insert_str(x, source_id, measure_id)
-            # f"('{self.parse_time_str(x[0])}', {source_id}, {measure_id}, {x[1]})"
-            for x in sub_data
-        ]
-        return cols, unique_list, data_list
+        data_list = [{ColName.TS:self.parse_time_str(x[0]),
+                      ColName.SOURCE_ID: source_id,
+                      ColName.MEASURE_ID: measure_id,
+                      ColName.VAL: x[1]}
+                      for x in sub_data]
+
+        return data_list
 
     @classmethod
     def parse_time_str(cls, V):
@@ -398,28 +380,21 @@ class EBAData:
         else:
             return f"('{cls.parse_time_str(x[0])}', {source_id}, {measure_id}, NULL)"
 
-    def get_eba_source_id(self, source, name, dpth=0):
-        # TODO: Overhaul for SQLAlchemy
-        qry_str = (
-            f"SELECT id FROM {TableName.EBA_META} WHERE {ColName.ABBR} = '{source}';"
-        )
-        source_id = self.sqldr.get_data(qry_str)
+    @classmethod
+    def get_eba_source_id(cls, source):
+        with DBSession() as sess, sess.begin():
+            rv = sess.execute(
+                select(EBAMeta.id).where(
+                    EBAMeta.abbr == source
+                )
+            ).first()
+        return rv[0]
 
-        if dpth > 2:
-            raise RuntimeError(f"EBA - No source found for {source_id}")
-
-        if not source_id:
-            # try to insert source,
-            print(f"EBA - No source found for {source_id}.  Trying update")
-            abbr_name_tups = self.get_name_abbr(name)
-            self._populate_iso_meta(abbr_name_tups)
-            return self.get_eba_source_id(source, name, dpth + 1)
-        return source_id[0][0]
-
-    def get_eba_measure_id(self, measure):
-        # TODO: Update For SQLAlchemy
-        measure_id = select(EBAMeasure.id).where(EBAMeasure.abbr == measure)
-        return measure_id[0][0]
+    @classmethod
+    def get_eba_measure_id(cls, measure):
+        with DBSession() as sess, sess.begin():
+            measure_id = sess.execute(select(EBAMeasure.id).where(EBAMeasure.abbr == measure)).first()
+            return measure_id[0]
 
 
 class ISDData:

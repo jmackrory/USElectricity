@@ -51,10 +51,10 @@ class Tests(TestCase):
 
         cls.sqldr = SQLDriver(sql_creds)
 
-    # @classmethod
-    # def tearDownClass(cls):
-    #    drop_test_tables(cls.eba)
-    #    drop_test_tables(cls.isd)
+    @classmethod
+    def tearDownClass(cls):
+        drop_test_tables(cls.eba)
+        drop_test_tables(cls.isd)
 
     def test_basic(self):
         self.assertEqual(2 + 2, 4)

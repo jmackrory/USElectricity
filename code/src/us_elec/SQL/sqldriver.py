@@ -449,8 +449,8 @@ class ISDDriver:
         self.sqldr = SQLDriver(sql_creds)
         self.ISD_TABLES = [TableName.ISD]
         self.ISD_MEASURES = [
-            ISDDF.TEMPERATURE,
-            ISDDF.WIND_SPEED,
+            ISDDF.TEMP,
+            ISDDF.WIND_SPD,
             ISDDF.PRECIP_1HR,
         ]
 
