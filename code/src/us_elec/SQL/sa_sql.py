@@ -5,12 +5,12 @@
 """
 import gzip
 import json
+import logging
 import os
 import re
 from datetime import datetime
 from functools import lru_cache
 from typing import Dict, List, Optional, Set, Tuple
-from tqdm import tqdm
 
 import jsonlines
 import pandas as pd
@@ -23,6 +23,7 @@ from sqlalchemy.orm import (
     scoped_session,
     sessionmaker,
 )
+from tqdm import tqdm
 from us_elec.SQL.constants import (
     DATA_DIR,
     YEARS,
@@ -35,6 +36,9 @@ from us_elec.SQL.constants import (
 from us_elec.SQL.sqldriver import ISDDF, Creds, get_cls_attr_dict
 from us_elec.util.get_weather_data import get_local_isd_path
 
+logger = logging.getLogger(__name__)
+
+
 # What exactly is going on here?
 # Is this a global session?  Should I not be using local, temporary sessions?
 
@@ -46,7 +50,7 @@ isddf = ISDDF()
 
 
 def get_engine(creds: Creds):
-    print(f"Creating Engine for {creds.user} in {creds.db}")
+    logger.info(f"Creating Engine for {creds.user} in {creds.db}")
 
     engine = create_engine(
         f"postgresql+psycopg2://{creds.user}:{creds.pw}@postgres:5432/{creds.db}"
@@ -64,18 +68,18 @@ def init_sqlalchemy(creds: Tuple[str]):
 def create_tables(db: str):
     global engine
     if engine.url.database != db:
-        print(f'DataBase Does Not Match DB! {engine.url.database}, {db}')
+        logger.error(f"DataBase Does Not Match DB! {engine.url.database}, {db}")
         return
-    print(f'Creating Tables in {db}')
+    logger.info(f"Creating Tables in {db}")
     SQLBase.metadata.create_all(engine, checkfirst=True)
 
 
 def drop_tables(db: str):
     global engine
     if engine.url.database != db:
-        print(f'DataBase Does Not Match DB! {engine.url.database}, {db}')
+        logger.error(f"DataBase Does Not Match DB! {engine.url.database}, {db}")
         return
-    print(f'Dropping Tables in {db}')
+    logger.info(f"Dropping Tables in {db}")
     SQLBase.metadata.drop_all(engine, checkfirst=True)
 
 
@@ -94,7 +98,7 @@ class EBA(SQLBase):
     ts: Mapped[datetime]
     source_id: Mapped[int]
     measure_id: Mapped[int]
-    val: Mapped[float]
+    val: Mapped[Optional[float]]
 
 
 class EBAInter(SQLBase):
@@ -105,7 +109,7 @@ class EBAInter(SQLBase):
     ts: Mapped[datetime]
     source_id: Mapped[int]
     dest_id: Mapped[int]
-    val: Mapped[float]
+    val: Mapped[Optional[float]]
 
 
 class EBAMeta(SQLBase):
@@ -137,7 +141,7 @@ class ISD(SQLBase):
     ts: Mapped[datetime]
     call_id: Mapped[int]
     measure_id: Mapped[int]
-    val: Mapped[float]
+    val: Mapped[Optional[float]]
 
 
 class ISDMeasure(SQLBase):
@@ -179,7 +183,7 @@ def create_indexes(db: str):
         try:
             index.create(bind=engine, checkfirst=True)
         except Exception as e:
-            print(e)
+            logger.error(e)
 
 
 def drop_indexes(db):
@@ -252,9 +256,9 @@ class EBAData:
         found_data = set()
         for D in data:
             if D in found_data:
-                print("dupe!", D)
+                logger.info("dupe!", D)
             found_data.update([D])
-        print(found_data)
+        logger.info(found_data)
 
     def populate_meta_tables(self):
         """Populate EBA metadata about ISOs and Measure abbreviations"""
@@ -329,7 +333,9 @@ class EBAData:
                     table = EBA
                     data_list = self._get_regular_sql_inputs(dat, Ntime=Ntime)
                 with DBSession() as sess, sess.begin():
-                    sess.execute(insert(table), data_list)
+                    sess.execute(
+                        insert(table).execution_options(render_nulls=True), data_list
+                    )
 
     def parse_eba_series_id(self, str):
         sub = str.split(".")[1:]  # drop the EBA
@@ -341,29 +347,39 @@ class EBAData:
     def _get_interchange_sql_inputs(self, dat, Ntime=-1):
         # Overhaul for SQLAlchemy
         source, dest, tag, _ = self.parse_eba_series_id(dat["series_id"])
-        source_id = self.get_eba_source_id(source)
-        dest_id = self.get_eba_source_id(dest)
+        source_id = self.get_eba_source_id(source, dat["name"])
+        dest_id = self.get_eba_source_id(dest, dat["name"])
 
         sub_data = dat["data"][:Ntime]
-        data_list = [{ColName.TS:self.parse_time_str(x[0]),
-                      ColName.SOURCE_ID: source_id,
-                      ColName.DEST_ID: dest_id,
-                      ColName.VAL: x[1]}
-                      for x in sub_data]
+        logger.info(source, sub_data[:5])
+        data_list = [
+            {
+                ColName.TS: self.parse_time_str(x[0]),
+                ColName.SOURCE_ID: source_id,
+                ColName.DEST_ID: dest_id,
+                ColName.VAL: float(x[1]),
+            }
+            for x in sub_data
+        ]
         return data_list
 
     def _get_regular_sql_inputs(self, dat: Dict, Ntime: int = -1):
         # TODO: Overhaul for SQLAlchemy
         source, dest, tag, _ = self.parse_eba_series_id(dat["series_id"])
-        source_id = self.get_eba_source_id(source)
+        source_id = self.get_eba_source_id(source, dat["name"])
         measure_id = self.get_eba_measure_id(tag)
 
         sub_data = dat["data"][:Ntime]
-        data_list = [{ColName.TS:self.parse_time_str(x[0]),
-                      ColName.SOURCE_ID: source_id,
-                      ColName.MEASURE_ID: measure_id,
-                      ColName.VAL: x[1]}
-                      for x in sub_data]
+        logger.info(source, sub_data[:5])
+        data_list = [
+            {
+                ColName.TS: self.parse_time_str(x[0]),
+                ColName.SOURCE_ID: source_id,
+                ColName.MEASURE_ID: measure_id,
+                ColName.VAL: x[1],
+            }
+            for x in sub_data
+        ]
 
         return data_list
 
@@ -381,19 +397,39 @@ class EBAData:
             return f"('{cls.parse_time_str(x[0])}', {source_id}, {measure_id}, NULL)"
 
     @classmethod
-    def get_eba_source_id(cls, source):
+    def get_eba_source_id(cls, source: str, name: str, depth=0):
+        if depth > 2:
+            raise RuntimeError(f"EBA - no source found for {source_id, name}")
+
         with DBSession() as sess, sess.begin():
-            rv = sess.execute(
-                select(EBAMeta.id).where(
-                    EBAMeta.abbr == source
-                )
+            source_id = sess.execute(
+                select(EBAMeta.id).where(EBAMeta.abbr == source)
             ).first()
-        return rv[0]
+
+        if not source_id:
+            # try to insert source,
+            logging.error(
+                f"EBA - No source found for {source_id, name}.  Trying update"
+            )
+            abbr_name_tups = cls.get_name_abbr(name)
+            logging.error(f"Adding {abbr_name_tups}")
+            data_list = [
+                {ColName.ABBR: abbr, ColName.FULL_NAME: full_name}
+                for abbr, full_name in abbr_name_tups
+            ]
+            with DBSession() as sess, sess.begin():
+                sess.execute(insert(EBAMeta), data_list)
+
+            return cls.get_eba_source_id(source, depth + 1)
+
+        return source_id[0]
 
     @classmethod
     def get_eba_measure_id(cls, measure):
         with DBSession() as sess, sess.begin():
-            measure_id = sess.execute(select(EBAMeasure.id).where(EBAMeasure.abbr == measure)).first()
+            measure_id = sess.execute(
+                select(EBAMeasure.id).where(EBAMeasure.abbr == measure)
+            ).first()
             return measure_id[0]
 
 
@@ -433,7 +469,7 @@ class ISDData:
     def populate_isd_meta(self):
         """Populate SQL table with Airport metadata from Pandas DF.  Also populate measure table"""
 
-        print("Loading ISD Meta Data")
+        logger.info("Loading ISD Meta Data")
         air_df = self.get_air_meta_df()
         data_cols = ["name", "City", "ST", "CALL", "USAF", "WBAN", "LAT", "LON"]
         sub_data = air_df[data_cols].values.tolist()
@@ -493,7 +529,7 @@ class ISDData:
         # out_sql = []
 
         for file_count, (file, callsign) in enumerate(tqdm(files)):
-            # print(file, callsign)
+            # logger.info(file, callsign)
             # df = load_isd_df(file)
             data_list = isddf.load_fwf_isd_file(file)
             callsign_id = self.get_callsign_id(callsign)
